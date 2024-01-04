@@ -1,0 +1,6 @@
+ extensions
+*.so
+*.DS_Store
+*logs/
+/data
+*__pycache__*
