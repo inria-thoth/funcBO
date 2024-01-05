@@ -77,13 +77,11 @@ class BilevelProblem:
         start = time.time()
         # Move data to GPU
         Z_outer = Z.to(self.device, dtype=torch.float)
-        X_outer = X.to(self.device, dtype=torch.float)
         Y_outer = Y.to(self.device, dtype=torch.float)
         # Inner value corresponds to h*(Z)
         outer_param.requires_grad = True
         forward_start = time.time()
         # Here is the only place where we need to optimize the inner solution
-        self.outer_model.train(True)
         self.inner_solution.optimize_inner = True
         # Get the value of h*(Z_outer)
         inner_value = self.inner_solution.forward(outer_param, Z_outer, Y_outer)
@@ -99,12 +97,12 @@ class BilevelProblem:
         #wandb.log({"inn. loss": self.inner_solution.loss})
         wandb.log({"inn. dual loss": self.inner_solution.dual_loss})
         #wandb.log({"out. loss": loss.item()})
-        wandb.log({"outer var. norm": torch.norm(outer_param).item()})
-        wandb.log({"outer var. grad. norm": torch.norm(outer_param.grad).item()})
         # Backpropagation
         self.outer_optimizer.zero_grad()
         backward_start = time.time()
         loss.backward()
+        wandb.log({"outer var. norm": torch.norm(outer_param).item()})
+        wandb.log({"outer var. grad. norm": torch.norm(outer_param.grad).item()})
         self.outer_optimizer.step()
         wandb.log({"duration of backward": time.time() - backward_start})
         # Update loss and iteration count

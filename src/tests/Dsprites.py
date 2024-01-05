@@ -71,6 +71,7 @@ inner_model, inner_dual_model, outer_model = build_net_for_dsprite(seed)
 inner_model.to(device)
 inner_dual_model.to(device)
 outer_model.to(device)
+outer_model.eval()
 print("First inner layer:", inner_model.layer1.weight.data)
 print("First outer layer:", outer_model.layer1.weight.data)
 
