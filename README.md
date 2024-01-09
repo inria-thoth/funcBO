@@ -8,6 +8,10 @@ Make sure to add BilevelProblem and InnerSolution directories to system PATH bef
 To install dependencies:
 pip install -r dependencies.txt
 
+To install funcBO
+pip install -e .
+
+
 To run the dsprites experiment with functional bilevel framework:
 python tests/Dsprites.py
 
