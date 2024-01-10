@@ -1,24 +1,14 @@
-import sys
 import torch
 import wandb
 import numpy as np
-from torch.utils.data import DataLoader
-from torch.nn import MSELoss
 
-# Add main project directory path
-sys.path.append('/home/clear/ipetruli/projects/bilevel-optimization/src')
-
-from funcBO.utils import *
-# The experiment-specific functions
-from datasets.dsprite.trainer import DFIVTrainer
-from datasets.dsprite.dspriteDFIV import *
+import time
 
 import os
-#os.environ['WANDB_DISABLED'] = 'true'
-
-# Set seed
-seed = 42#set_seed()
-set_seed(seed)
+os.environ['WANDB_DISABLED'] = 'true'
+os.chdir('/home/ipetruli/funcBO')
+from datasets.dsprite.dspriteDFIV import *
+from datasets.dsprite.trainer import DFIVTrainer
 
 # Setting the device to GPUs if available.
 if torch.cuda.is_available():
@@ -29,6 +19,7 @@ else:
     print("No GPUs found, setting the device to CPU.")
 
 # Setting hyper-parameters
+seed = 42
 max_epochs = 5000
 max_inner_iters = 20
 lam2 = 0.1
@@ -44,8 +35,8 @@ inner_data, outer_data = split_train_data(train_data, split_ratio=0.5)
 inner_model, outer_model = build_net_for_dsprite(seed)
 inner_model.to(device)
 outer_model.to(device)
-print("First inner layer:", inner_model.layer1.weight.data)
-print("First outer layer:", outer_model.layer1.weight.data)
+print("First inner layer:", list(inner_model.parameters())[0].data)
+print("First outer layer:", list(outer_model.parameters())[0].data)
 
 # Optimizer that improves the approximation of h*
 inner_lr = 1e-4

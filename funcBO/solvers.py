@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 from funcBO.utils import config_to_instance
 
-
-
 class Solver:
+  """
+  Base class for solvers.
+  """
   def __init__(self,model, objective):
     self.model = model
     self.objective = objective
@@ -12,6 +13,9 @@ class Solver:
     raise NotImplementedError
 
 class IterativeSolver(Solver):
+  """
+  Iterative solver.
+  """
   def __init__(self, model,objective, optimizer, scheduler=None,num_iter=1):
     super(IterativeSolver, self).__init__(model, objective)
     self.optimizer = config_to_instance(**optimizer, params=model.parameters())
@@ -26,9 +30,10 @@ class IterativeSolver(Solver):
       loss.backward()
       self.optimizer.step()
 
-
 class CompositeSolver(Solver):
-
+  """
+  Iterative solver that finds W* when a*( ) is of the form a*( ) = W* h( ).
+  """
   def __init__(self, model, objective, reg_objective, optimizer, scheduler=None,num_iter=1):
     super(CompositeSolver, self).__init__(model, objective)
     self.optimizer = config_to_instance(**optimizer, params=model.parameters())
@@ -43,17 +48,15 @@ class CompositeSolver(Solver):
       inner_model_inputs, inner_loss_inputs =  self.objective.data_projector(data)
       inner_model_outputs = self.model.model(inner_model_inputs)
       loss, weight = self.reg_objective(*objective_args,inner_model_outputs,inner_loss_inputs)
-      
       #loss = self.objective(self.model,*objective_args)
       loss.backward()
       self.optimizer.step()
       self.model.linear.weight.data = weight.t().detach()
 
-
-
-
-
 class ClosedFormSolver(Solver):
+  """
+  Solver that finds a*( ) in closed form.
+  """
   def __init__(self,model,objective,reg=0.):
     super(ClosedFormSolver, self).__init__(model, objective)
     self.reg = reg
@@ -67,15 +70,6 @@ class ClosedFormSolver(Solver):
     hessian = torch.permute(hessian,(1, 0))
     hessian += self.reg*torch.eye(hessian.shape[0], dtype= hessian.dtype, device= hessian.device)
     W = -torch.linalg.solve(hessian, B)
-    W = torch.unflatten(W,dim=0,sizes=weight_shape)
+    W = torch.unflatten(W, dim=0, sizes=weight_shape)
     weights = list(self.model.parameters())
     weights[0].data = W.detach()
-
-
-    
-
-
-
-
-
-

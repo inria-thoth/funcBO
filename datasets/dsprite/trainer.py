@@ -43,7 +43,6 @@ def linear_reg_pred(feature, weight):
 def linear_reg_loss(target, feature, reg):
     weight = fit_linear(target, feature, reg)
     pred = linear_reg_pred(feature, weight)
-    #wandb.log({"inn. loss": (torch.norm((target - pred))**2).item()})#(MSE(pred, target))
     loss = torch.norm((target - pred)) ** 2 + reg * torch.norm(weight) ** 2
     return loss
 
@@ -67,10 +66,6 @@ def fit_linear(target, feature, reg):
     return weight
 
 def fit_2sls(treatment_1st_feature, instrumental_1st_feature, instrumental_2nd_feature, outcome_2nd_t, lam1, lam2):
-    #print("treatment_1st_feature norm:", torch.norm(treatment_1st_feature))
-    #print("instrumental_1st_feature norm:", torch.norm(instrumental_1st_feature))
-    #print("instrumental_2nd_feature norm:", torch.norm(instrumental_2nd_feature))
-    #print("outcome_2nd_t norm:", torch.norm(outcome_2nd_t))
     # stage1
     feature = augment_stage1_feature(instrumental_1st_feature)
     stage1_weight = fit_linear(treatment_1st_feature, feature, lam1)
@@ -81,9 +76,6 @@ def fit_2sls(treatment_1st_feature, instrumental_1st_feature, instrumental_2nd_f
     feature = augment_stage2_feature(predicted_treatment_feature)
     stage2_weight = fit_linear(outcome_2nd_t, feature, lam2)
     pred = linear_reg_pred(feature, stage2_weight)
-    #wandb.log({"out. loss with reg.": (MSE(pred, outcome_2nd_t) + lam2 * torch.norm(stage2_weight) ** 2).item()})
-    #wandb.log({"out. loss": (MSE(pred, outcome_2nd_t)).item()})
-    #wandb.log({"out. loss term2": (lam2 * torch.norm(stage2_weight) ** 2).item()})
     stage2_loss = torch.norm((outcome_2nd_t - pred)) ** 2 + lam2 * torch.norm(stage2_weight) ** 2
     return dict(stage1_weight=stage1_weight,
                 predicted_treatment_feature=predicted_treatment_feature,
@@ -96,10 +88,6 @@ def fit_2sls(treatment_1st_feature, instrumental_1st_feature, instrumental_2nd_f
 def fit_2n_stage(instrumental_2nd_feature, 
                  outcome_2nd_t, 
                  lam2):
-    #print("treatment_1st_feature norm:", torch.norm(treatment_1st_feature))
-    #print("instrumental_1st_feature norm:", torch.norm(instrumental_1st_feature))
-    #print("instrumental_2nd_feature norm:", torch.norm(instrumental_2nd_feature))
-    #print("outcome_2nd_t norm:", torch.norm(outcome_2nd_t))
     # stage1
     #feature = augment_stage1_feature(instrumental_1st_feature)
     #stage1_weight = fit_linear(treatment_1st_feature, feature, lam1)
@@ -110,9 +98,6 @@ def fit_2n_stage(instrumental_2nd_feature,
     feature = augment_stage2_feature(instrumental_2nd_feature)
     stage2_weight = fit_linear(outcome_2nd_t, feature, lam2)
     pred = linear_reg_pred(feature, stage2_weight)
-    #wandb.log({"out. loss with reg.": (MSE(pred, outcome_2nd_t) + lam2 * torch.norm(stage2_weight) ** 2).item()})
-    #wandb.log({"out. loss": (MSE(pred, outcome_2nd_t)).item()})
-    #wandb.log({"out. loss term2": (lam2 * torch.norm(stage2_weight) ** 2).item()})
     stage2_loss = torch.norm((outcome_2nd_t - pred)) ** 2 + lam2 * torch.norm(stage2_weight) ** 2
     return dict(stage2_weight=stage2_weight,
                 stage2_loss=stage2_loss)
@@ -175,9 +160,8 @@ class DFIVTrainer:
             loss = linear_reg_loss(treatment_feature, feature, self.lam1)
             loss.backward()
             grad_norm = (sum([torch.norm(p.grad)**2 for p in self.instrumental_net.parameters()]))
-            #wandb.log({"inner grad. norm": grad_norm})
             self.instrumental_opt.step()
-            #print("instrumental_net first layer norm:", torch.norm(self.instrumental_net.layer1.weight))
+            
 
     def stage2_update(self, stage1_dataset, stage2_dataset):
         """
@@ -195,13 +179,13 @@ class DFIVTrainer:
             self.treatment_opt.zero_grad()
             # Get the value of f(X)_stage1
             treatment_1st_feature = self.treatment_net(stage1_dataset.treatment)
-            #print("before call instrumental_net first layer norm:", torch.norm(self.instrumental_net.layer1.weight))
             res = fit_2sls(treatment_1st_feature, instrumental_1st_feature, instrumental_2nd_feature, stage2_dataset.outcome, self.lam1, self.lam2)
             loss = res["stage2_loss"]
+            wandb.log({"out. loss": loss.item()})
             loss.backward()
+            wandb.log({"outer var. norm": (torch.sqrt(sum([torch.norm(p.data)**2 for p in self.treatment_net.parameters()]))).item()})
+            wandb.log({"outer var. grad. norm": (torch.sqrt(sum([torch.norm(p.grad)**2 for p in self.treatment_net.parameters()]))).item()})
             self.treatment_opt.step()
-            grad_norm = (sum([torch.norm(p.grad)**2 for p in self.treatment_net.parameters()]))
-            #wandb.log({"outer var. grad. norm": grad_norm})
         return res["stage2_weight"]
     
     def evaluate(self, test_dataset, u):
@@ -213,5 +197,3 @@ class DFIVTrainer:
         # Get the value of f(X)
         treatment_feature = self.treatment_net(test_dataset.treatment).detach()
         loss = MSE((treatment_feature @ u[:-1]) + u[-1], test_dataset.structural)
-        #wandb.log({"test u norm": (torch.norm(u)).item()})
-        #wandb.log({"test loss": loss.item()})

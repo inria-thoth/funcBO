@@ -240,20 +240,20 @@ class InnerModel(nn.Module):
         super(InnerModel, self).__init__()
 
         self.model = nn.Sequential(
-          spectral_norm(nn.Linear(3, 256)),
+          nn.Linear(3, 256),#spectral_norm(nn.Linear(3, 256)),
           nn.ReLU(),
-          spectral_norm(nn.Linear(256, 128)),
+          nn.Linear(256, 128),#spectral_norm(nn.Linear(256, 128)),
           nn.ReLU(),
-          nn.BatchNorm1d(128),
-          spectral_norm(nn.Linear(128, 128)),
+          #nn.BatchNorm1d(128),
+          nn.Linear(128, 128),#spectral_norm(nn.Linear(128, 128)),
           nn.ReLU(),
-          nn.BatchNorm1d(128),
-          spectral_norm(nn.Linear(128, 32)),
-          nn.BatchNorm1d(32),
-          nn.ReLU(),
+          #nn.BatchNorm1d(128),
+          nn.Linear(128, 32),#spectral_norm(nn.Linear(128, 32)),
+          #nn.BatchNorm1d(32),
+          nn.ReLU()
         )
 
-        self.linear = nn.Linear(33,41, bias=False)
+        self.linear = nn.Linear(33,32, bias=False)
         
     def forward(self, x):
         x = self.model(x)
@@ -268,15 +268,16 @@ class OuterModel(nn.Module):
         super(OuterModel, self).__init__()
         self.model = nn.Sequential(spectral_norm(nn.Linear(64 * 64, 1024)),
                                     nn.ReLU(),
-                                    spectral_norm(nn.Linear(1024, 512)),
+                                    nn.Linear(1024, 512),#spectral_norm(nn.Linear(1024, 512)),
                                     nn.ReLU(),
                                     #nn.BatchNorm1d(512),
-                                    spectral_norm(nn.Linear(512, 128)),
+                                    nn.Linear(512, 128),#spectral_norm(nn.Linear(512, 128)),
                                     nn.ReLU(),
-                                    spectral_norm(nn.Linear(128, 41)),
-                                    #nn.BatchNorm1d(41),
+                                    nn.Linear(128, 32),#spectral_norm(nn.Linear(128, 32)),
+                                    #nn.BatchNorm1d(32),
                                     nn.Tanh()
             )
+
     def forward(self, x):
         res = self.model(x)
         return res
@@ -284,8 +285,6 @@ class OuterModel(nn.Module):
 def build_net_for_dsprite(seed):
   torch.manual_seed(seed)
   instrumental_net = InnerModel()
-  #torch.manual_seed(seed)
-  #instrumental_dual_net = InnerModel()#nn.Sequential(nn.Linear(33, 33))
   torch.manual_seed(seed)
   response_net = OuterModel()
   return instrumental_net,response_net

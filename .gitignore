@@ -3,4 +3,6 @@
 *.DS_Store
 *logs/
 /data
+/wandb
 *__pycache__*
+/funcBO.egg-info

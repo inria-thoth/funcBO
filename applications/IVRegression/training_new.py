@@ -1,5 +1,5 @@
 import torch
-#import wandb
+import wandb
 
 from torch.utils.data import DataLoader
 from torch.nn import MSELoss
@@ -7,19 +7,29 @@ import time
 
 from funcBO.InnerSolution_new import InnerSolution
 
+import os
+os.environ['WANDB_DISABLED'] = 'true'
+os.chdir('/home/ipetruli/funcBO')
 from datasets.dsprite.dspriteBilevel import *
 from datasets.dsprite.trainer import *
 
 from funcBO.utils import state_dict_to_tensor, tensor_to_state_dict
 
-import os
-os.environ['WANDB_DISABLED'] = 'true'
-
-# Set seed
-#seed = 42#set_seed()
-
-
 def assign_device(device):
+    """
+    Assigns a device for PyTorch based on the provided device identifier.
+
+    Parameters:
+    - device (int): Device identifier. If positive, it represents the GPU device
+                   index; if -1, it sets the device to 'cuda'; if -2, it sets
+                   the device to 'cpu'.
+
+    Returns:
+    - device (str): The assigned device, represented as a string. 
+                    'cuda:X' if device > -1 and CUDA is available, where X is 
+                    the provided device index. 'cuda' if device is -1.
+                    'cpu' if device is -2.
+    """
     if device >-1:
         device = (
             'cuda:'+str(device) 
@@ -33,13 +43,25 @@ def assign_device(device):
     return device
 
 def get_dtype(dtype):
+    """
+    Returns the PyTorch data type based on the provided integer identifier.
+
+    Parameters:
+    - dtype (int): Integer identifier representing the desired data type.
+                   64 corresponds to torch.double, and 32 corresponds to torch.float.
+
+    Returns:
+    - torch.dtype: PyTorch data type corresponding to the provided identifier.
+
+    Raises:
+    - NotImplementedError: If the provided identifier is not recognized (not 64 or 32).
+    """
     if dtype==64:
         return torch.double
     elif dtype==32:
         return torch.float
     else:
         raise NotImplementedError('Unkown type')
-
 
 def make_run_name(inner_lr,
                   inner_dual_lr,
@@ -71,7 +93,17 @@ def make_run_name(inner_lr,
     return run_name
 
 class Trainer:
+    """
+    Solves an instrumental regression problem using the bilevel functional method.
+    """
     def __init__(self,config,logger):
+        """
+        Initializes the Trainer class with the provided configuration and logger.
+
+        Parameters:
+        - config (object): Configuration object containing various settings.
+        - logger (object): Logger object for logging metrics and information.
+        """
         self.logger = logger
         self.args = config
         self.device = assign_device(self.args.system.device)
@@ -80,16 +112,12 @@ class Trainer:
 
     def log(self,dico):
         self.logger.log_metrics(dico, log_name="metrics")
-        #wandb.log(dico)
-
 
     def build_trainer(self):
-
-
-        # Setting hyper-parameters
-        # Method for computing a*() : "closed_form_a", "GD", "GDinH", "closed_form_DFIV"
+        """
+        Builds the trainer by setting up data, models, and optimization components (losses, optimizers).
+        """
         device = self.device
-
         # Get data
         test_data = generate_test_dsprite(device=device)
         train_data, validation_data = generate_train_dsprite(data_size=self.args.data_size, 
@@ -111,13 +139,10 @@ class Trainer:
         treatment_test = test_data.treatment
         outcome_test = test_data.structural
 
-
         if not (validation_data is None):
             instrumental_val = validation_data.instrumental
             treatment_val = validation_data.treatment
             outcome_val = validation_data.outcome
-
-
 
         # Dataloaders for inner and outer data
         inner_data = DspritesData(instrumental_in, treatment_in, outcome_in)
@@ -136,13 +161,11 @@ class Trainer:
         self.inner_model, self.outer_model = build_net_for_dsprite(self.args.seed)
         self.inner_model.to(device)
         self.outer_model.to(device)
-        #print("First inner layer:", self.inner_model.layer1.weight.data)
-        #print("First outer layer:", self.outer_model.layer1.weight.data)
-
+        print("First inner layer:", list(self.inner_model.parameters())[0].data)
+        print("First outer layer:", list(self.outer_model.parameters())[0].data)
 
         # The outer neural network parametrized by the outer variable
-        self.outer_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.outer_model, device))#torch.cat((torch.rand(u_dim).to(device), state_dict_to_tensor(outer_model, device)), 0)
-
+        self.outer_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.outer_model, device))
 
         # Optimizer that improves the outer variable
         self.outer_optimizer = torch.optim.Adam([self.outer_param], 
@@ -171,10 +194,7 @@ class Trainer:
         # print("Run configuration:", run_name)
 
         # Set logging
-        #wandb.init(group="Dsprites_bilevelIV_a=Wh_test", name=run_name)
-
-        # Gather all models
-        #inner_models = (self.inner_model, self.inner_optimizer, inner_scheduler, self.inner_dual_model, self.inner_dual_optimizer, inner_dual_scheduler)
+        wandb.init(group="Dsprites_bilevelIV_general")
 
         # Loss helper functions
         self.MSE = nn.MSELoss()
@@ -187,7 +207,8 @@ class Trainer:
                             lam_u)
             return res["stage2_loss"], res["stage2_weight"]
 
-        def fi(outer_param, instrumental_feature,X):
+        # Inner objective function that depends only on the inner prediction
+        def fi(outer_param, instrumental_feature, X):
             outer_NN_dic = tensor_to_state_dict(self.outer_model, 
                                                 self.outer_param, 
                                                 device)
@@ -195,13 +216,10 @@ class Trainer:
                                 parameter_and_buffer_dicts=outer_NN_dic, 
                                 args=X, 
                                 strict=True))
-            # Get the value of g(Z)
-            #feature = augment_stage1_feature(instrumental_feature)
-            loss = torch.norm((instrumental_feature - treatment_feature)) ** 2 
-            #\                + lam_V * torch.norm(weight) ** 2
-            #loss = self.MSE(instrumental_feature,treatment_feature)
+            loss = torch.norm((instrumental_feature - treatment_feature)) ** 2
             return loss
 
+        # Inner objective function with regularization
         def reg_objective(outer_param, g_z_in, X):
             outer_NN_dic = tensor_to_state_dict(self.outer_model, 
                                                 self.outer_param, 
@@ -213,15 +231,23 @@ class Trainer:
             # Get the value of g(Z)
             instrumental_feature = g_z_in
             feature = augment_stage1_feature(instrumental_feature)
-            
             weight = fit_linear(treatment_feature, feature, lam_V)
             pred = linear_reg_pred(feature, weight)
-            #wandb.log({"inn. loss": (torch.norm((target - pred))**2).item()})#(MSE(pred, target))
             loss = torch.norm((treatment_feature - pred)) ** 2 + lam_V * torch.norm(weight) ** 2
-
             return loss, weight
 
         def projector(data):
+            """
+            Extracts and returns the relevant components (z, x) from the input data.
+
+            Parameters:
+            - data (tuple): A tuple containing information, where the first element represents z,
+                        the second element represents x, and the third element may contain
+                        additional information (ignored in this context).
+
+            Returns:
+            - tuple: A tuple containing the relevant components (z, x) extracted from the input data.
+            """
             z,x,_ = data
             return z,x
 
@@ -244,10 +270,10 @@ class Trainer:
                                             dual_solver_args= self.args.dual_solver
                                             )
 
-
-        # Optimize using neural implicit differention
-        
     def train(self):
+        """
+        The main optimization loop for the bilevel functional method.
+        """
         iters = 0
         for epoch in range(self.args.max_epochs):
           for Z, X, Y in self.outer_dataloader:
@@ -258,42 +284,29 @@ class Trainer:
             X_outer = X.to(self.device, dtype=torch.float)
             Y_outer = Y.to(self.device, dtype=torch.float)
             # Inner value corresponds to h*(Z)
-            #self.outer_param.requires_grad = True
             forward_start = time.time()
-            # Here is the only place where we need to optimize the inner solution
-            #self.outer_model.train(True)
-            #self.inner_solution.optimize_inner = True
             # Get the value of h*(Z_outer)
             inner_value = self.inner_solution(Z_outer)
-            # Make sure that the inner solution is not optimized
-            #self.inner_solution.optimize_inner = False
-            #self.inner_solution.model.train(False)
-            #self.inner_solution.dual_model.train(False)
             metrics_dict['forward_time']= time.time() - forward_start
             loss, u = self.outer_loss(inner_value, Y_outer)
-            # For checking the computational <autograd> graph.
-
-            #metrics_dict['dual_loss'] =self.inner_solution.dual_loss
-            #metrics_dict['norm_outer_param']= self.inner_solution.dual_loss
             # Backpropagation
             self.outer_optimizer.zero_grad()
             backward_start = time.time()
             loss.backward()
             self.outer_optimizer.step()
+            wandb.log({"out. loss": loss.item()})
+            wandb.log({"outer var. norm": torch.norm(self.outer_param).item()})
+            wandb.log({"outer var. grad. norm": torch.norm(self.outer_param.grad).item()})
             metrics_dict['norm_grad_outer_param']= torch.norm(self.outer_param.grad).item()
             metrics_dict['forward_time']= time.time() - backward_start
             metrics_dict['iter_time']= time.time() - start
             metrics_dict['iters']= iters
-            # Update loss and iteration count
-            # Inner losses
-            #metrics_dict['inner_loss']= self.inner_solution.loss
             metrics_dict['outer_loss']= loss.item()
             # Evaluate on validation data and check the stopping condition
-            if (iters % 10==0):
+            if (iters % 10 == 0):
                 print(metrics_dict)
             self.log(metrics_dict)
             iters += 1
-
           if (not (self.validation_data is None)) and (iters % self.args.eval_every_n == 0):
             val_dict = {'val_loss': self.evaluate(self.validation_data, self.outer_param, last_layer=u),
                         'val_iters': iters}
@@ -302,12 +315,17 @@ class Trainer:
             test_dict= {'test_loss': self.evaluate(self.test_data, last_layer=u),
                         'test_iter': iters}
 
-
     def evaluate(self, data, outer_model=None, last_layer=None):
         """
-        Evaluate the prediction quality on the test dataset.
-          param data: data to evaluate on
-          param outer_param: outer variable
+        Evaluates the performance of the model on the given data.
+
+        Parameters:
+        - data (object): Data object containing outcome and treatment information.
+        - outer_model (object): Outer model used for evaluation. Defaults to self.outer_model.
+        - last_layer (tensor): Last layer weights for an additional transformation. Defaults to None.
+
+        Returns:
+        - float: The evaluation loss on the provided data.
         """
         if outer_model is None:
           outer_model = self.outer_model
@@ -316,14 +334,12 @@ class Trainer:
           Y = (torch.from_numpy(data.outcome)).to(self.device, dtype=torch.float)
           X = (torch.from_numpy(data.treatment)).to(self.device, dtype=torch.float)
           outer_NN_dic = tensor_to_state_dict(self.outer_model, self.outer_param, self.device)
-          # Get the value of f(X)
           pred = torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X)
           if last_layer is None:
             loss = self.MSE(pred, Y)
           else:
             loss = self.MSE((pred @ last_layer[:-1] + last_layer[-1]), Y)
         return loss.item()
-
 
 
 
