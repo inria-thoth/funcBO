@@ -7,7 +7,7 @@ from torch.nn import MSELoss
 #from torch.optim.lr_scheduler import StepLR
 
 # Add main project directory path
-sys.path.append('/home/clear/ipetruli/projects/bilevel-optimization/src')
+sys.path.append('/home/ipetruli/funcBO/src')
 
 from model.utils import *
 # The experiment-specific functions
@@ -16,7 +16,7 @@ from my_data.dsprite.dspriteBilevel import *
 from my_data.dsprite.trainer import *
 
 import os
-os.environ['WANDB_DISABLED'] = 'true'
+#os.environ['WANDB_DISABLED'] = 'true'
 
 # Set seed
 seed = 42#set_seed()
@@ -31,14 +31,15 @@ else:
     print("No GPUs found, setting the device to CPU.")
 
 # Setting hyper-parameters
+torch.set_default_dtype(torch.float64)
 batch_size = 2500
 max_epochs = 5000
 max_inner_dual_epochs, max_inner_epochs = 20, 20
 eval_every_n = 1
 lam_u = 0.1
 lam_V = 0.1
-# Method for computing a*() : "closed_form_a", "GD", "GDinH", "closed_form_DFIV"
-a_star_method = "closed_form_a"
+# Method for computing a*() : "closed_form_a", "GD", "closed_form_DFIV", "GDinH" (for this option need to change the architecture of the inner dual network)
+a_star_method = "closed_form_a_tensors"
 
 # Get data
 #instrumental_train, treatment_train, outcome_train, instrumental_val, treatment_val, outcome_val, treatment_test, outcome_test = generate_dsprite_data(train_size=6, val_size=6)
@@ -112,12 +113,14 @@ MSE = nn.MSELoss()
 # Outer objective function
 def fo(outer_param, g_z_out, Y):
     # Get the value of g(Z) inner
-    instrumental_1st_feature = inner_model(inner_data.instrumental).detach()
+    instrumental_1st_feature = inner_model(inner_data.instrumental)
+    instrumental_1st_feature = instrumental_1st_feature.detach()
     # Get the value of g(Z) outer
     instrumental_2nd_feature = g_z_out
     # Get the value of f(X) inner
     outer_NN_dic = tensor_to_state_dict(outer_model, outer_param, device)
     treatment_1st_feature = torch.func.functional_call(outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=inner_data.treatment, strict=True)
+    treatment_1st_feature = treatment_1st_feature.detach()
     #print("before call instrumental_net first layer norm:", torch.norm(inner_model.layer1.weight))
     res = fit_2sls(treatment_1st_feature, instrumental_1st_feature, instrumental_2nd_feature, Y, lam_V, lam_u)
     return res["stage2_loss"], res["stage2_weight"]
@@ -133,7 +136,17 @@ def fi(outer_param, g_z_in, X):
     loss = linear_reg_loss(treatment_feature, feature, lam_V)
     return loss
 
+# Inner objective function
+def fi_function_of_h(outer_param, h_Z, X):
+    # Get the value of f(X) outer
+    outer_NN_dic = tensor_to_state_dict(outer_model, outer_param, device)
+    treatment_feature = (torch.func.functional_call(outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X, strict=True))
+    if h_Z.size(1) != treatment_feature.size(1):
+        treatment_feature = augment_stage1_feature(treatment_feature)
+    loss = torch.norm((treatment_feature - h_Z)) ** 2# + lam_V * torch.norm(weight) ** 2
+    return loss
+
 # Optimize using neural implicit differention
-bp_neural = BilevelProblem(fo, fi, outer_dataloader, inner_dataloader, outer_models, inner_models, device, batch_size=batch_size, max_inner_epochs=max_inner_epochs, max_inner_dual_epochs=max_inner_dual_epochs, args=[lam_u, lam_V, a_star_method])
+bp_neural = BilevelProblem(fo, fi, outer_dataloader, inner_dataloader, outer_models, inner_models, device, batch_size=batch_size, max_inner_epochs=max_inner_epochs, max_inner_dual_epochs=max_inner_dual_epochs, args=[lam_u, lam_V, a_star_method, fi_function_of_h])
 # Solve the bilevel problem
 iters, outer_losses, inner_losses, test_losses, times = bp_neural.optimize(outer_param, max_epochs=max_epochs, eval_every_n=eval_every_n, validation_data=validation_data, test_data=test_data)

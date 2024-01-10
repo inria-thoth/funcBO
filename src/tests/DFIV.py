@@ -29,6 +29,7 @@ else:
     print("No GPUs found, setting the device to CPU.")
 
 # Setting hyper-parameters
+torch.set_default_dtype(torch.float64)
 max_epochs = 5000
 max_inner_iters = 20
 lam2 = 0.1

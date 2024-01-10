@@ -76,8 +76,9 @@ class BilevelProblem:
       for Z, X, Y in self.outer_dataloader:
         start = time.time()
         # Move data to GPU
-        Z_outer = Z.to(self.device, dtype=torch.float)
-        Y_outer = Y.to(self.device, dtype=torch.float)
+        Z_outer = Z.to(self.device, dtype=torch.float64)
+        X_outer = X.to(self.device, dtype=torch.float64)
+        Y_outer = Y.to(self.device, dtype=torch.float64)
         # Inner value corresponds to h*(Z)
         outer_param.requires_grad = True
         forward_start = time.time()
@@ -89,13 +90,13 @@ class BilevelProblem:
         self.inner_solution.optimize_inner = False
         self.inner_solution.model.train(False)
         self.inner_solution.dual_model.train(False)
-        wandb.log({"duration of forward": time.time() - forward_start})
+        #wandb.log({"duration of forward": time.time() - forward_start})
         loss, u = self.outer_loss(outer_param, inner_value, Y_outer)
         # For checking the computational <autograd> graph.
         #make_dot(loss, params={ "outer param.":outer_param}, show_attrs=True, show_saved=True).render("graph_loss", format="png")
         #exit(0)
         #wandb.log({"inn. loss": self.inner_solution.loss})
-        wandb.log({"inn. dual loss": self.inner_solution.dual_loss})
+        #wandb.log({"inn. dual loss": self.inner_solution.dual_loss})
         #wandb.log({"out. loss": loss.item()})
         # Backpropagation
         self.outer_optimizer.zero_grad()
@@ -104,11 +105,11 @@ class BilevelProblem:
         wandb.log({"outer var. norm": torch.norm(outer_param).item()})
         wandb.log({"outer var. grad. norm": torch.norm(outer_param.grad).item()})
         self.outer_optimizer.step()
-        wandb.log({"duration of backward": time.time() - backward_start})
+        #wandb.log({"duration of backward": time.time() - backward_start})
         # Update loss and iteration count
         iters += 1
         duration = time.time() - start
-        wandb.log({"iter. time": duration})
+        #wandb.log({"iter. time": duration})
         times.append(duration)
         # Inner losses
         inner_losses.append(self.inner_solution.loss)
@@ -134,8 +135,8 @@ class BilevelProblem:
     self.inner_solution.model.train(False)
     self.inner_solution.dual_model.train(False)
     with torch.no_grad():
-      Y = (torch.from_numpy(data.outcome)).to(self.device, dtype=torch.float)
-      X = (torch.from_numpy(data.treatment)).to(self.device, dtype=torch.float)
+      Y = (torch.from_numpy(data.outcome)).to(self.device, dtype=torch.float64)
+      X = (torch.from_numpy(data.treatment)).to(self.device, dtype=torch.float64)
       outer_NN_dic = tensor_to_state_dict(outer_model, outer_param, self.device)
       # Get the value of f(X)
       pred = torch.func.functional_call(outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X)

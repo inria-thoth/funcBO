@@ -36,12 +36,12 @@ class TrainDataSetTorch(NamedTuple):
     def from_numpy(cls, train_data: TrainDataSet):
         covariate = None
         if train_data.covariate is not None:
-            covariate = torch.tensor(train_data.covariate, dtype=torch.float32)
-        return TrainDataSetTorch(treatment=torch.tensor(train_data.treatment, dtype=torch.float32),
-                                 instrumental=torch.tensor(train_data.instrumental, dtype=torch.float32),
+            covariate = torch.tensor(train_data.covariate, dtype=torch.float64)
+        return TrainDataSetTorch(treatment=torch.tensor(train_data.treatment, dtype=torch.float64),
+                                 instrumental=torch.tensor(train_data.instrumental, dtype=torch.float64),
                                  covariate=covariate,
-                                 outcome=torch.tensor(train_data.outcome, dtype=torch.float32),
-                                 structural=torch.tensor(train_data.structural, dtype=torch.float32))
+                                 outcome=torch.tensor(train_data.outcome, dtype=torch.float64),
+                                 structural=torch.tensor(train_data.structural, dtype=torch.float64))
 
     def to_gpu(self):
         covariate = None
@@ -63,10 +63,10 @@ class TestDataSetTorch(NamedTuple):
     def from_numpy(cls, test_data: TestDataSet):
         covariate = None
         if test_data.covariate is not None:
-            covariate = torch.tensor(test_data.covariate, dtype=torch.float32)
-        return TestDataSetTorch(treatment=torch.tensor(test_data.treatment, dtype=torch.float32),
+            covariate = torch.tensor(test_data.covariate, dtype=torch.float64)
+        return TestDataSetTorch(treatment=torch.tensor(test_data.treatment, dtype=torch.float64),
                                 covariate=covariate,
-                                structural=torch.tensor(test_data.structural, dtype=torch.float32))
+                                structural=torch.tensor(test_data.structural, dtype=torch.float64))
     def to_gpu(self):
         covariate = None
         if self.covariate is not None:
