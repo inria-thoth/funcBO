@@ -7,7 +7,7 @@ import time
 
 from funcBO.InnerSolution import InnerSolution
 
-from datasets.dsprite.dspriteBilevel import *
+from datasets.dsprite.dsprite_data_generator import *
 from datasets.dsprite.trainer import *
 
 from funcBO.utils import state_dict_to_tensor, tensor_to_state_dict

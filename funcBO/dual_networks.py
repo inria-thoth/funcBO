@@ -4,8 +4,6 @@ from copy import deepcopy
 from collections import OrderedDict
 
 
-
-
 class DualNetwork(nn.Module):
   def __init__(self,network, make_deepcopy=True):
     super(DualNetwork,self).__init__()
@@ -19,13 +17,20 @@ class DualNetwork(nn.Module):
 
 
 class LinearDualNetwork(DualNetwork):
+  """
+  Outer layer is the layer that gives the features phi(Z),
+  by default none, then just takes the layer before the last.
+  """
   def __init__(self,network, 
                     network_inputs, 
                     make_deepcopy = False,
                     output_layer = None):
     super(LinearDualNetwork,self).__init__(network,make_deepcopy=make_deepcopy)
     if not output_layer:
+      # List of all layers assuming that the network is sequential
       L = len(network._modules.keys())
+      # At least two layers to have the one before the last
+      # TODO: this does not work when the network is a Sequential object, it then considers that there is only one layer
       assert L>=2
       for i, name in enumerate(network._modules.keys()):
         if i==L-2:
@@ -63,7 +68,6 @@ class LinearDualNetwork(DualNetwork):
 
   def parameters(self):
       return (self.linear.parameters()) 
-
 
 
 class ModelWithHook(nn.Module):

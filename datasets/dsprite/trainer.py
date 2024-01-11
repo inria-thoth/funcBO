@@ -82,9 +82,6 @@ def fit_2sls(treatment_1st_feature, instrumental_1st_feature, instrumental_2nd_f
                 stage2_weight=stage2_weight,
                 stage2_loss=stage2_loss)
 
-
-
-
 def fit_2n_stage(instrumental_2nd_feature, 
                  outcome_2nd_t, 
                  lam2):
@@ -101,11 +98,6 @@ def fit_2n_stage(instrumental_2nd_feature,
     stage2_loss = torch.norm((outcome_2nd_t - pred)) ** 2 + lam2 * torch.norm(stage2_weight) ** 2
     return dict(stage2_weight=stage2_weight,
                 stage2_loss=stage2_loss)
-
-
-
-
-
 
 
 class DFIVTrainer:
@@ -158,11 +150,11 @@ class DFIVTrainer:
             instrumental_feature = self.instrumental_net(stage1_dataset.instrumental)
             feature = augment_stage1_feature(instrumental_feature)
             loss = linear_reg_loss(treatment_feature, feature, self.lam1)
+            wandb.log({"in. loss": loss.item()})
             loss.backward()
             grad_norm = (sum([torch.norm(p.grad)**2 for p in self.instrumental_net.parameters()]))
             self.instrumental_opt.step()
             
-
     def stage2_update(self, stage1_dataset, stage2_dataset):
         """
         Perform second stage of DFIV.

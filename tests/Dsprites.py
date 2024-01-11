@@ -12,7 +12,7 @@ sys.path.append('/home/clear/ipetruli/projects/bilevel-optimization/src')
 from funcBO.utils import *
 # The experiment-specific functions
 from funcBO.BilevelProblem import BilevelProblem
-from datasets.dsprite.dspriteBilevel import *
+from datasets.dsprite.dsprite_data_generator import *
 from datasets.dsprite.trainer import *
 
 import os

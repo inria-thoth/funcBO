@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from funcBO.utils import config_to_instance
 
+import wandb
+
 class Solver:
   """
   Base class for solvers.
@@ -27,6 +29,7 @@ class IterativeSolver(Solver):
     for i in range(self.num_iter):
       self.optimizer.zero_grad()
       loss = self.objective(self.model,*objective_args)
+      wandb.log({"in. loss": loss.item()})
       loss.backward()
       self.optimizer.step()
 
@@ -46,11 +49,21 @@ class CompositeSolver(Solver):
       self.optimizer.zero_grad()
       data = self.objective.get_data()
       inner_model_inputs, inner_loss_inputs =  self.objective.data_projector(data)
+      # These are the features (last 'model' corresponds to sequential object in the NN architecture)
       inner_model_outputs = self.model.model(inner_model_inputs)
-      loss, weight = self.reg_objective(*objective_args,inner_model_outputs,inner_loss_inputs)
+      loss, weight = self.reg_objective(*objective_args, inner_model_outputs, inner_loss_inputs)
+      wandb.log({"in. loss": loss.item()})
       #loss = self.objective(self.model,*objective_args)
       loss.backward()
       self.optimizer.step()
+      # Here we do one more fit to get the closed-form weights of the last linear layer
+      if i == self.num_iter-1:
+        with torch.no_grad():
+          self.model.eval()
+
+          inner_model_outputs = self.model.model(inner_model_inputs)
+          loss, weight = self.reg_objective(*objective_args, inner_model_outputs, inner_loss_inputs)
+      # Set last linear layer weights with their closed form values
       self.model.linear.weight.data = weight.t().detach()
 
 class ClosedFormSolver(Solver):

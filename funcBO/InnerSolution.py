@@ -11,7 +11,7 @@ from torch.func import jacrev
 from torch.func import functional_call
 from torch.nn import functional as func
 from funcBO.utils import get_memory_info, cos_dist, tensor_to_state_dict
-from datasets.dsprite.dspriteBilevel import OuterModel
+from datasets.dsprite.dsprite_data_generator import OuterModel
 from datasets.dsprite.trainer import augment_stage1_feature, augment_stage2_feature, linear_reg_pred, linear_reg_loss, fit_linear
 
 device = "cuda" if torch.cuda.is_available() else "cpu"

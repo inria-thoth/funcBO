@@ -56,16 +56,11 @@ class InnerSolution(nn.Module):
                                       model= self.inner_model,
                                       objective=self.inner_objective)
 
-
-
     self.make_dual(dual_model_args, dual_solver_args)
     self.register_outer_parameters(outer_model)
 
 
   def make_dual(self,dual_model_args, dual_solver_args):
-
-
-
     dual_model_name = dual_model_args['name']
     inner_model_inputs = self.inner_objective.get_inner_model_input()
 
@@ -93,9 +88,6 @@ class InnerSolution(nn.Module):
     if isinstance(self.dual_solver,ClosedFormSolver):
       assert isinstance(self.dual_model,LinearDualNetwork)
 
-
-
-
   def register_outer_parameters(self,outer_model):
     if isinstance(outer_model,nn.Module):
       for name, param in outer_model.named_parameters():
@@ -107,7 +99,6 @@ class InnerSolution(nn.Module):
       self.outer_params = outer_model
     elif isinstance(outer_model,nn.parameter.Parameter):
       self.register_parameter(name="outer_param", param=outer_model)
-
 
   def forward(self, inner_model_inputs):
     """

@@ -8,9 +8,9 @@ import time
 from funcBO.InnerSolution_new import InnerSolution
 
 import os
-os.environ['WANDB_DISABLED'] = 'true'
+#os.environ['WANDB_DISABLED'] = 'true'
 os.chdir('/home/ipetruli/funcBO')
-from datasets.dsprite.dspriteBilevel import *
+from datasets.dsprite.dsprite_data_generator import *
 from datasets.dsprite.trainer import *
 
 from funcBO.utils import state_dict_to_tensor, tensor_to_state_dict
@@ -120,45 +120,28 @@ class Trainer:
         device = self.device
         # Get data
         test_data = generate_test_dsprite(device=device)
-        train_data, validation_data = generate_train_dsprite(data_size=self.args.data_size, 
-                                                rand_seed=self.args.seed, 
-                                                device=device, 
-                                                val_size=self.args.val_size)
-        inner_data, outer_data = split_train_data(train_data, split_ratio=self.args.split_ratio)
+        train_data, validation_data = generate_train_dsprite(data_size=self.args.data_size,
+                                                            rand_seed=self.args.seed,
+                                                            val_size=self.args.val_size)
+        inner_data, outer_data = split_train_data(train_data, split_ratio=self.args.split_ratio, rand_seed=self.args.seed, device=device)
 
         # Weird scaling of lambdas done in training
         lam_V = self.args.lam_V*inner_data[0].size()[0]
         lam_u = self.args.lam_u*outer_data[0].size()[0]
 
-        instrumental_in= inner_data.instrumental
-        treatment_in = inner_data.treatment
-        outcome_in = inner_data.outcome
-        instrumental_out = outer_data.instrumental
-        treatment_out = outer_data.treatment
-        outcome_out = outer_data.outcome
-        treatment_test = test_data.treatment
-        outcome_test = test_data.structural
-
-        if not (validation_data is None):
-            instrumental_val = validation_data.instrumental
-            treatment_val = validation_data.treatment
-            outcome_val = validation_data.outcome
-
         # Dataloaders for inner and outer data
-        inner_data = DspritesData(instrumental_in, treatment_in, outcome_in)
+        inner_data = DspritesTrainData(inner_data)
         self.inner_dataloader = DataLoader(dataset=inner_data, batch_size=self.args.batch_size, shuffle=False)#, drop_last=True)
-        outer_data = DspritesData(instrumental_out, treatment_out, outcome_out)
+        outer_data = DspritesTrainData(outer_data)
         self.outer_dataloader = DataLoader(dataset=outer_data, batch_size=self.args.batch_size, shuffle=False)#, drop_last=True)
-        self.test_data = DspritesTestData(treatment_test, outcome_test)
-        if not (validation_data is None):
-            self.validation_data = DspritesData(instrumental_val, treatment_val, outcome_val)
+        self.test_data = DspritesTestData(test_data)
+        if validation_data is not None:
+            self.validation_data = DspritesTrainData(validation_data)
         else:
-            self.validation_data = validation_data 
-        inner_data.instrumental = inner_data.instrumental.to(device)
-        inner_data.treatment = inner_data.treatment.to(device)
+            self.validation_data = validation_data
 
         # Neural networks for dsprites data
-        self.inner_model, self.outer_model = build_net_for_dsprite(self.args.seed)
+        self.inner_model, self.outer_model = build_net_for_dsprite(self.args.seed, method='sequential+linear')
         self.inner_model.to(device)
         self.outer_model.to(device)
         print("First inner layer:", list(self.inner_model.parameters())[0].data)
@@ -331,8 +314,8 @@ class Trainer:
           outer_model = self.outer_model
         self.outer_model.eval()
         with torch.no_grad():
-          Y = (torch.from_numpy(data.outcome)).to(self.device, dtype=torch.float)
-          X = (torch.from_numpy(data.treatment)).to(self.device, dtype=torch.float)
+          Y = data.test_data.structural
+          X = data.test_data.treatment
           outer_NN_dic = tensor_to_state_dict(self.outer_model, self.outer_param, self.device)
           pred = torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X)
           if last_layer is None:

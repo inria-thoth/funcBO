@@ -5,9 +5,9 @@ import numpy as np
 import time
 
 import os
-os.environ['WANDB_DISABLED'] = 'true'
+#os.environ['WANDB_DISABLED'] = 'true'
 os.chdir('/home/ipetruli/funcBO')
-from datasets.dsprite.dspriteDFIV import *
+from datasets.dsprite.dsprite_data_generator import *
 from datasets.dsprite.trainer import DFIVTrainer
 
 # Setting the device to GPUs if available.
@@ -26,13 +26,14 @@ lam2 = 0.1
 lam1 = 0.1
 
 # Get data
-#inner_data, outer_data, test_data = generate_dsprite_data(train_size=6, val_size=6, device=device)
 test_data = generate_test_dsprite(device=device)
-train_data = generate_train_dsprite(data_size=5000, rand_seed=seed, device=device)
-inner_data, outer_data = split_train_data(train_data, split_ratio=0.5)
+train_data, validation_data = generate_train_dsprite(data_size=5000,
+                                                    rand_seed=seed)
+inner_data, outer_data = split_train_data(train_data, split_ratio=0.5, rand_seed=seed, device=device)
+test_data = TestDataSetTorch.from_numpy(test_data, device=device)
 
 # Neural networks for dsprites data
-inner_model, outer_model = build_net_for_dsprite(seed)
+inner_model, outer_model = build_net_for_dsprite(seed, method='sequential')
 inner_model.to(device)
 outer_model.to(device)
 print("First inner layer:", list(inner_model.parameters())[0].data)
