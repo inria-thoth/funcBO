@@ -28,7 +28,7 @@ inner_solver:
     num_iter: 20
 
 dual_solver:
-    name: 'funcBO.solvers.ClosedFormSolver'
+    name: 'funcBO.solvers.IVClosedFormSolver'
 dual_model:
     name: 'funcBO.dual_networks.LinearDualNetwork'
 

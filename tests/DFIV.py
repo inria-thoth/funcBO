@@ -19,6 +19,7 @@ else:
     print("No GPUs found, setting the device to CPU.")
 
 # Setting hyper-parameters
+dtype = torch.float32
 seed = 42
 max_epochs = 5000
 max_inner_iters = 20
@@ -29,8 +30,8 @@ lam1 = 0.1
 test_data = generate_test_dsprite(device=device)
 train_data, validation_data = generate_train_dsprite(data_size=5000,
                                                     rand_seed=seed)
-inner_data, outer_data = split_train_data(train_data, split_ratio=0.5, rand_seed=seed, device=device)
-test_data = TestDataSetTorch.from_numpy(test_data, device=device)
+inner_data, outer_data = split_train_data(train_data, split_ratio=0.5, rand_seed=seed, device=device, dtype=dtype)
+test_data = TestDataSetTorch.from_numpy(test_data, device=device, dtype=dtype)
 
 # Neural networks for dsprites data
 inner_model, outer_model = build_net_for_dsprite(seed, method='sequential')

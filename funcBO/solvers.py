@@ -70,7 +70,7 @@ class ClosedFormSolver(Solver):
   """
   Solver that finds a*( ) in closed form.
   """
-  def __init__(self,model,objective,reg=0.):
+  def __init__(self, model, objective, reg=0.):
     super(ClosedFormSolver, self).__init__(model, objective)
     self.reg = reg
   def run(self,*objective_args):
@@ -84,5 +84,21 @@ class ClosedFormSolver(Solver):
     hessian += self.reg*torch.eye(hessian.shape[0], dtype= hessian.dtype, device= hessian.device)
     W = -torch.linalg.solve(hessian, B)
     W = torch.unflatten(W, dim=0, sizes=weight_shape)
+    weights = list(self.model.parameters())
+    weights[0].data = W.detach()
+
+class IVClosedFormSolver(Solver):
+  """
+  Solver that finds a*( ) in closed form.
+  """
+  def __init__(self, model, objective, reg=0.):
+    super(IVClosedFormSolver, self).__init__(model, objective)
+    self.reg = reg
+  def run(self,*objective_args):
+    hessian, B = self.objective.make_reduced_linear_system(self.model, *objective_args)
+    weight_shape = B.shape
+    hessian += self.reg*torch.eye(hessian.shape[0], dtype= hessian.dtype, device= hessian.device)
+    H_in = torch.inverse(hessian)
+    W = -0.5*torch.einsum('dc, ic->id', H_in, B)
     weights = list(self.model.parameters())
     weights[0].data = W.detach()

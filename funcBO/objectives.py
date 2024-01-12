@@ -125,8 +125,23 @@ class DualObjective:
     hessian = torch.einsum('bij, bc, bd->icjd',hessian,inner_features,inner_features)
     outer_grad = outer_grad.flatten(start_dim=1)
     B = torch.einsum('bi, bc->ic',outer_grad,outer_features)
-
-    #### TODO: some reshaping into matrix and vector
-
     return hessian, B
 
+  def make_reduced_linear_system(self, dual_model,
+                                outer_param,
+                                dual_model_inputs, 
+                                outer_grad):
+      data = self.objective.get_data(use_previous_data=True)
+      inner_model_inputs, inner_loss_inputs =  self.objective.data_projector(data)
+      inner_model = self.inner_model
+      inner_model.eval()
+      with torch.no_grad():
+        inner_model_output = inner_model(inner_model_inputs)
+        _,inner_features = dual_model(inner_model_inputs,with_features=True)
+        _,outer_features = dual_model(dual_model_inputs,with_features=True)
+
+      output_shape = inner_model_output.shape[1:]
+      hessian = torch.einsum('bc, bd->cd',inner_features,inner_features)
+      outer_grad = outer_grad.flatten(start_dim=1)
+      B = torch.einsum('bi, bc->ic',outer_grad,outer_features)
+      return hessian, B

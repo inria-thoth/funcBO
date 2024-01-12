@@ -123,7 +123,8 @@ class Trainer:
         train_data, validation_data = generate_train_dsprite(data_size=self.args.data_size,
                                                             rand_seed=self.args.seed,
                                                             val_size=self.args.val_size)
-        inner_data, outer_data = split_train_data(train_data, split_ratio=self.args.split_ratio, rand_seed=self.args.seed, device=device)
+        inner_data, outer_data = split_train_data(train_data, split_ratio=self.args.split_ratio, rand_seed=self.args.seed, device=device, dtype=self.dtype)
+        test_data = TestDataSetTorch.from_numpy(test_data, device=device, dtype=self.dtype)
 
         # Weird scaling of lambdas done in training
         lam_V = self.args.lam_V*inner_data[0].size()[0]
@@ -199,7 +200,7 @@ class Trainer:
                                 parameter_and_buffer_dicts=outer_NN_dic, 
                                 args=X, 
                                 strict=True))
-            loss = torch.norm((instrumental_feature - treatment_feature)) ** 2
+            loss = torch.norm((instrumental_feature - treatment_feature)) ** 2# + 0.07 * torch.norm(instrumental_feature) ** 2
             return loss
 
         # Inner objective function with regularization
@@ -239,6 +240,9 @@ class Trainer:
 
         if self.args.dual_solver['name']=='funcBO.solvers.ClosedFormSolver':
             self.args.dual_solver['reg'] = lam_V
+
+        if self.args.dual_solver['name']=='funcBO.solvers.IVClosedFormSolver':
+            self.args.dual_solver['reg'] = lam_V
         
         self.inner_loss = fi
         self.outer_loss = fo
@@ -272,12 +276,12 @@ class Trainer:
             inner_value = self.inner_solution(Z_outer)
             metrics_dict['forward_time']= time.time() - forward_start
             loss, u = self.outer_loss(inner_value, Y_outer)
+            wandb.log({"out. loss": loss.item()})
             # Backpropagation
             self.outer_optimizer.zero_grad()
             backward_start = time.time()
             loss.backward()
             self.outer_optimizer.step()
-            wandb.log({"out. loss": loss.item()})
             wandb.log({"outer var. norm": torch.norm(self.outer_param).item()})
             wandb.log({"outer var. grad. norm": torch.norm(self.outer_param.grad).item()})
             metrics_dict['norm_grad_outer_param']= torch.norm(self.outer_param.grad).item()

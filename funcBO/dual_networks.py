@@ -74,7 +74,6 @@ class ModelWithHook(nn.Module):
     def __init__(self, output_layers, model):
         super(ModelWithHook,self).__init__()
         self.output_layers = output_layers
-        #print(self.output_layers)
         self.selected_out = None
         #PRETRAINED MODEL
         self.model = model

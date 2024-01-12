@@ -175,9 +175,9 @@ class DFIVTrainer:
             loss = res["stage2_loss"]
             wandb.log({"out. loss": loss.item()})
             loss.backward()
+            self.treatment_opt.step()
             wandb.log({"outer var. norm": (torch.sqrt(sum([torch.norm(p.data)**2 for p in self.treatment_net.parameters()]))).item()})
             wandb.log({"outer var. grad. norm": (torch.sqrt(sum([torch.norm(p.grad)**2 for p in self.treatment_net.parameters()]))).item()})
-            self.treatment_opt.step()
         return res["stage2_weight"]
     
     def evaluate(self, test_dataset, u):

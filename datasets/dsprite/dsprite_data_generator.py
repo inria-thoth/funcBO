@@ -33,15 +33,15 @@ class TrainDataSetTorch(NamedTuple):
     structural: torch.Tensor
 
     @classmethod
-    def from_numpy(cls, train_data: TrainDataSet, device='cpu'):
+    def from_numpy(cls, train_data: TrainDataSet, device='cpu', dtype=torch.float32):
         covariate = None
         if train_data.covariate is not None:
-            covariate = torch.tensor(train_data.covariate, dtype=torch.float32).to(device)
-        return TrainDataSetTorch(treatment=torch.tensor(train_data.treatment, dtype=torch.float32).to(device),
-                                 instrumental=torch.tensor(train_data.instrumental, dtype=torch.float32).to(device),
+            covariate = torch.tensor(train_data.covariate, dtype=dtype).to(device)
+        return TrainDataSetTorch(treatment=torch.tensor(train_data.treatment, dtype=dtype).to(device),
+                                 instrumental=torch.tensor(train_data.instrumental, dtype=dtype).to(device),
                                  covariate=covariate,
-                                 outcome=torch.tensor(train_data.outcome, dtype=torch.float32).to(device),
-                                 structural=torch.tensor(train_data.structural, dtype=torch.float32).to(device))
+                                 outcome=torch.tensor(train_data.outcome, dtype=dtype).to(device),
+                                 structural=torch.tensor(train_data.structural, dtype=dtype).to(device))
 
     def to_gpu(self):
         covariate = None
@@ -60,13 +60,13 @@ class TestDataSetTorch(NamedTuple):
     structural: torch.Tensor
 
     @classmethod
-    def from_numpy(cls, test_data: TestDataSet, device='cpu'):
+    def from_numpy(cls, test_data: TestDataSet, device='cpu', dtype=torch.float32):
         covariate = None
         if test_data.covariate is not None:
-            covariate = torch.tensor(test_data.covariate, dtype=torch.float32).to(device)
-        return TestDataSetTorch(treatment=torch.tensor(test_data.treatment, dtype=torch.float32).to(device),
+            covariate = torch.tensor(test_data.covariate, dtype=dtype).to(device)
+        return TestDataSetTorch(treatment=torch.tensor(test_data.treatment, dtype=dtype).to(device),
                                 covariate=covariate,
-                                structural=torch.tensor(test_data.structural, dtype=torch.float32).to(device))
+                                structural=torch.tensor(test_data.structural, dtype=dtype).to(device))
     def to_gpu(self):
         covariate = None
         if self.covariate is not None:
@@ -117,9 +117,6 @@ def generate_test_dsprite(device):
     treatment = imgs[image_idx_arr].reshape((data_size, 64 * 64))
     structural = structural_func(treatment, weights)
     structural = structural[:, np.newaxis]
-    # Moving to gpu
-    treatment = torch.from_numpy(treatment).float().to(device)
-    structural = torch.from_numpy(structural).float().to(device)
     return TestDataSet(treatment=treatment, covariate=None, structural=structural)
 
 def generate_train_dsprite(data_size, rand_seed, val_size=0):
@@ -171,7 +168,7 @@ def generate_train_dsprite(data_size, rand_seed, val_size=0):
     return train_data_final, validation_data_final
 
 
-def split_train_data(train_data, split_ratio, rand_seed=42, device='cpu'):
+def split_train_data(train_data, split_ratio, rand_seed=42, device='cpu', dtype=torch.float32):
     n_data = train_data[0].shape[0]
     idx_train_1st, idx_train_2nd = train_test_split(np.arange(n_data), train_size=split_ratio, random_state=rand_seed)
 

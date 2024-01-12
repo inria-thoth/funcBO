@@ -85,8 +85,8 @@ class InnerSolution(nn.Module):
     self.dual_solver = config_to_instance(**dual_solver_args,
                                       model = self.dual_model,
                                       objective=self.dual_objective)
-    if isinstance(self.dual_solver,ClosedFormSolver):
-      assert isinstance(self.dual_model,LinearDualNetwork)
+    if isinstance(self.dual_solver, ClosedFormSolver):
+      assert isinstance(self.dual_model, LinearDualNetwork)
 
   def register_outer_parameters(self,outer_model):
     if isinstance(outer_model,nn.Module):

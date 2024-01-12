@@ -137,7 +137,7 @@ class Trainer:
         self.inner_model.to(device)
         self.inner_dual_model.to(device)
         self.outer_model.to(device)
-        print("First inner layer:", self.inner_model.layer1.weight.data)
+        print("First inner layer:", self.inner_model.layer1.weight.data[0])
         print("First outer layer:", self.outer_model.layer1.weight.data)
 
         # Optimizer that improves the approximation of h*
