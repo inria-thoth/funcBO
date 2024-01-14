@@ -6,7 +6,7 @@ import mlxp
 time_00 = time.time()
 
 
-from training_new import Trainer
+from training import Trainer
 
 time_01 = time.time()
 

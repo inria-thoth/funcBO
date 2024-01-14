@@ -4,9 +4,7 @@
 parent_work_dir="../../data/.workdir" 
 parent_log_dir="../../data/outputs/debug" 
 
-HYDRA_FULL_ERROR=1 OC_CAUSE=1 python main.py \
-                lam_u=0.1\
-                lam_V=0.1\
+HYDRA_FULL_ERROR=1 OC_CAUSE=1 python -m ipdb main.py \
                 +mlxp.use_scheduler=False\
                 +mlxp.use_version_manager=False\
                 +mlxp.use_logger=True\
