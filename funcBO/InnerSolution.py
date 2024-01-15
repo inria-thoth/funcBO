@@ -58,6 +58,7 @@ class InnerSolution(nn.Module):
 
     self.make_dual(dual_model_args, dual_solver_args)
     self.register_outer_parameters(outer_model)
+    self.inner_loss = 0
 
 
   def make_dual(self,dual_model_args, dual_solver_args):

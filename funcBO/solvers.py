@@ -46,7 +46,6 @@ class IterativeSolver(Solver):
       loss = add_reg(self, loss, self.model.parameters())
       self.data_logs.append({'loss': loss.item(),
                               'iter': i})
-      #wandb.log({"in. loss": loss.item()})
       loss.backward()
       self.optimizer.step()
 

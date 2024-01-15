@@ -1,6 +1,6 @@
 seed: 42
 batch_size: 2500
-max_epochs: 5
+max_epochs: 1000
 eval_every_n: 1
 lam_u: 0.1
 lam_V: 0.2

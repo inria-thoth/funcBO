@@ -125,13 +125,14 @@ class DFIVTrainer:
         self.lam2 *= stage2_dataset[0].size()[0]
         for epoch in range(self.max_epochs):
             metrics_dict = {}
+            metrics_dict['iter'] = epoch
             self.stage1_update(stage1_dataset)
             stage2_res = self.stage2_update(stage1_dataset, stage2_dataset)
             metrics_dict['outer_loss']= stage2_res["stage2_loss"].item()
+            test_loss = self.evaluate(test_dataset, stage2_res["stage2_weight"])
+            metrics_dict['test_loss'] = test_loss.item()
             self.logger.log_metrics(metrics_dict, log_name='metrics')
-            self.evaluate(test_dataset, stage2_res["stage2_weight"])
-            if (epoch % 1 == 0):
-                print(metrics_dict)
+            print(metrics_dict)
 
     def stage1_update(self, stage1_dataset):
         """
@@ -183,3 +184,4 @@ class DFIVTrainer:
         # Get the value of f(X)
         treatment_feature = self.treatment_net(test_dataset.treatment).detach()
         loss = MSE((treatment_feature @ u[:-1]) + u[-1], test_dataset.structural)
+        return loss

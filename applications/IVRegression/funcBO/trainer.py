@@ -173,6 +173,7 @@ class Trainer:
         for epoch in range(self.args.max_epochs):
           for Z, X, Y in self.outer_dataloader:
             metrics_dict = {}
+            metrics_dict['iter'] = iters
             start = time.time()
             # Move data to GPU
             Z_outer = Z.to(self.device, dtype=torch.float)
@@ -195,17 +196,16 @@ class Trainer:
                 self.log_metrics_list(inner_logs, iters, log_name='inner_metrics')
             if dual_logs:
                 self.log_metrics_list(dual_logs, iters, log_name='dual_metrics')
-            # Evaluate on validation data and check the stopping condition
-            if (iters % 1 == 0):
-                print(metrics_dict)
+            if (self.validation_data is not None) and (iters % self.args.eval_every_n == 0):
+                val_dict = {'val_loss': self.evaluate(self.validation_data, self.outer_param, last_layer=u),
+                            'val_iters': iters}
+            if (self.test_data is not None):
+                metrics_dict['test_loss'] = (self.evaluate(self.test_data, last_layer=u)).item()
+                #test_dict= {'test_loss': self.evaluate(self.test_data, last_layer=u),
+                #            'test_iter': iters}
             self.log(metrics_dict)
+            print(metrics_dict)
             iters += 1
-          if (self.validation_data is not None) and (iters % self.args.eval_every_n == 0):
-            val_dict = {'val_loss': self.evaluate(self.validation_data, self.outer_param, last_layer=u),
-                        'val_iters': iters}
-          if (self.test_data is not None):
-            test_dict= {'test_loss': self.evaluate(self.test_data, last_layer=u),
-                        'test_iter': iters}
 
     def evaluate(self, data, outer_model=None, last_layer=None):
         """
@@ -231,7 +231,7 @@ class Trainer:
             loss = self.MSE(pred, Y)
           else:
             loss = self.MSE((pred @ last_layer[:-1] + last_layer[-1]), Y)
-        return loss.item()
+        return loss
 
 
 
