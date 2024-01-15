@@ -1,102 +1,17 @@
 import torch
-import wandb
-
+from applications.IVRegression.dsprites_data.trainer import *
+from applications.IVRegression.dsprites_data.generator import *
+import time
+from funcBO.utils import assign_device, get_dtype, state_dict_to_tensor, tensor_to_state_dict
 from torch.utils.data import DataLoader
 from torch.nn import MSELoss
-import time
-
 from funcBO.InnerSolution import InnerSolution
-
-import os
-#os.environ['WANDB_DISABLED'] = 'true'
-#os.chdir('/home/ipetruli/funcBO') ### Avoid hardcoding absolute paths. Code should not require this.
-from datasets.dsprite.dsprite_data_generator import *
-from datasets.dsprite.trainer import *
-
-from funcBO.utils import state_dict_to_tensor, tensor_to_state_dict
-
-def assign_device(device):
-    """
-    Assigns a device for PyTorch based on the provided device identifier.
-
-    Parameters:
-    - device (int): Device identifier. If positive, it represents the GPU device
-                   index; if -1, it sets the device to 'cuda'; if -2, it sets
-                   the device to 'cpu'.
-
-    Returns:
-    - device (str): The assigned device, represented as a string. 
-                    'cuda:X' if device > -1 and CUDA is available, where X is 
-                    the provided device index. 'cuda' if device is -1.
-                    'cpu' if device is -2.
-    """
-    if device >-1:
-        device = (
-            'cuda:'+str(device) 
-            if torch.cuda.is_available() and device>-1 
-            else 'cpu'
-        )
-    elif device==-1:
-        device = 'cuda'
-    elif device==-2:
-        device = 'cpu'
-    return device
-
-def get_dtype(dtype):
-    """
-    Returns the PyTorch data type based on the provided integer identifier.
-
-    Parameters:
-    - dtype (int): Integer identifier representing the desired data type.
-                   64 corresponds to torch.double, and 32 corresponds to torch.float.
-
-    Returns:
-    - torch.dtype: PyTorch data type corresponding to the provided identifier.
-
-    Raises:
-    - NotImplementedError: If the provided identifier is not recognized (not 64 or 32).
-    """
-    if dtype==64:
-        return torch.double
-    elif dtype==32:
-        return torch.float
-    else:
-        raise NotImplementedError('Unkown type')
-
-def make_run_name(inner_lr,
-                  inner_dual_lr,
-                  outer_lr,
-                  inner_wd,
-                  inner_dual_wd,
-                  outer_wd,
-                  max_inner_dual_epochs,
-                  max_inner_epochs,
-                  seed,
-                  lam_u,
-                  lam_V,
-                  batch_size,
-                  max_epochs):
-    run_name = "Dsprites bilevel::="
-    run_name+=" inner_lr:"+str(inner_lr)
-    run_name+=", dual_lr:"+str(inner_dual_lr)
-    run_name+=", outer_lr:"+str(outer_lr)
-    run_name+=", inner_wd:"+str(inner_wd)
-    run_name+=", dual_wd:"+str(inner_dual_wd)
-    run_name+=", outer_wd:"+str(outer_wd)
-    run_name+=", max_inner_dual_epochs:"+str(max_inner_dual_epochs)
-    run_name+=", max_inner_epochs:"+str(max_inner_epochs)
-    run_name+=", seed:"+str(seed)
-    run_name+=", lam_u:"+str(lam_u)
-    run_name+=", lam_V:"+str(lam_V)
-    run_name+=", batch_size:"+str(batch_size)
-    run_name+=", max_epochs:"+str(max_epochs)
-    return run_name
 
 class Trainer:
     """
     Solves an instrumental regression problem using the bilevel functional method.
     """
-    def __init__(self,config,logger):
+    def __init__(self, config, logger):
         """
         Initializes the Trainer class with the provided configuration and logger.
 
@@ -108,11 +23,12 @@ class Trainer:
         self.args = config
         self.device = assign_device(self.args.system.device)
         self.dtype = get_dtype(self.args.system.dtype)
-        self.build_trainer() 
+        self.build_trainer()
 
     def log(self,dico, log_name='metrics'):
         self.logger.log_metrics(dico, log_name=log_name)
-    def log_metrics_list(self,dico_list, iteration, prefix="", log_name='metrics'):
+
+    def log_metrics_list(self, dico_list, iteration, prefix="", log_name='metrics'):
         total_iter = len(dico_list)
         for dico in dico_list:
             dico['outer_iter'] = iteration
@@ -122,10 +38,11 @@ class Trainer:
 
     def build_trainer(self):
         """
-        Builds the trainer by setting up data, models, and optimization components (losses, optimizers).
+        Builds the trainer by setting up data, models, and optimization components (number of epochs, optimizers, etc.).
         """
         device = self.device
-        # Get data
+
+        # Generate synthetic dsprites data
         test_data = generate_test_dsprite(device=device)
         train_data, validation_data = generate_train_dsprite(data_size=self.args.data_size,
                                                             rand_seed=self.args.seed,
@@ -133,16 +50,16 @@ class Trainer:
         inner_data, outer_data = split_train_data(train_data, split_ratio=self.args.split_ratio, rand_seed=self.args.seed, device=device, dtype=self.dtype)
         test_data = TestDataSetTorch.from_numpy(test_data, device=device, dtype=self.dtype)
 
-        # Weird scaling of lambdas done in training
-        inner_data_size = inner_data[0].size()[0]
+        # Scaling of the regularization parameters
+        inner_data_size = inner_data[0].size(0)
         lam_V = self.args.lam_V
-        lam_u = self.args.lam_u*outer_data[0].size()[0]
+        lam_u = self.args.lam_u*outer_data[0].size(0)
 
         # Dataloaders for inner and outer data
         inner_data = DspritesTrainData(inner_data)
-        self.inner_dataloader = DataLoader(dataset=inner_data, batch_size=self.args.batch_size, shuffle=False)#, drop_last=True)
+        self.inner_dataloader = DataLoader(dataset=inner_data, batch_size=self.args.batch_size, shuffle=False)
         outer_data = DspritesTrainData(outer_data)
-        self.outer_dataloader = DataLoader(dataset=outer_data, batch_size=self.args.batch_size, shuffle=False)#, drop_last=True)
+        self.outer_dataloader = DataLoader(dataset=outer_data, batch_size=self.args.batch_size, shuffle=False)
         self.test_data = DspritesTestData(test_data)
         if validation_data is not None:
             self.validation_data = DspritesTrainData(validation_data)
@@ -153,9 +70,7 @@ class Trainer:
         self.inner_model, self.outer_model = build_net_for_dsprite(self.args.seed, method='sequential+linear')
         self.inner_model.to(device)
         self.outer_model.to(device)
-        print("First inner layer:", list(self.inner_model.parameters())[0].data)
-        print("First outer layer:", list(self.outer_model.parameters())[0].data)
-
+        
         # The outer neural network parametrized by the outer variable
         self.outer_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.outer_model, device))
 
@@ -167,26 +82,6 @@ class Trainer:
         inner_scheduler = None
         inner_dual_scheduler = None
         outer_scheduler = None
-
-        # # Print configuration
-        # run_name = make_run_name(self.args.optimizer.inner_lr,
-        #                           self.args.optimizer.inner_dual_lr,
-        #                           self.args.optimizer.outer_lr,
-        #                           self.args.optimizer.inner_wd,
-        #                           self.args.optimizer.inner_dual_wd,
-        #                           self.args.optimizer.outer_wd,
-        #                           self.args.max_inner_dual_epochs,
-        #                           self.args.max_inner_epochs,
-        #                           self.args.seed,
-        #                           self.args.lam_u,
-        #                           self.args.lam_V,
-        #                           self.args.batch_size,
-        #                           self.args.max_epochs)
-
-        # print("Run configuration:", run_name)
-
-        # Set logging
-        #wandb.init(group="Dsprites_bilevelIV_general")
 
         # Loss helper functions
         self.MSE = nn.MSELoss()
@@ -287,21 +182,13 @@ class Trainer:
             forward_start = time.time()
             # Get the value of h*(Z_outer)
             inner_value = self.inner_solution(Z_outer)
-            metrics_dict['forward_time']= time.time() - forward_start
             loss, u = self.outer_loss(inner_value, Y_outer)
-            #wandb.log({"out. loss": loss.item()})
             # Backpropagation
             self.outer_optimizer.zero_grad()
             backward_start = time.time()
             loss.backward()
             self.outer_optimizer.step()
-            #wandb.log({"outer var. norm": torch.norm(self.outer_param).item()})
-            #wandb.log({"outer var. grad. norm": torch.norm(self.outer_param.grad).item()})
-            metrics_dict['norm_grad_outer_param']= torch.norm(self.outer_param.grad).item()
-            metrics_dict['forward_time']= time.time() - backward_start
-            metrics_dict['iter_time']= time.time() - start
-            metrics_dict['iters']= iters
-            metrics_dict['outer_loss']= loss.item()
+            metrics_dict['outer_loss'] = loss.item()
             inner_logs = self.inner_solution.inner_solver.data_logs
             dual_logs = self.inner_solution.dual_solver.data_logs
             if inner_logs:
@@ -309,19 +196,14 @@ class Trainer:
             if dual_logs:
                 self.log_metrics_list(dual_logs, iters, log_name='dual_metrics')
             # Evaluate on validation data and check the stopping condition
-            if (iters % 10 == 0):
+            if (iters % 1 == 0):
                 print(metrics_dict)
             self.log(metrics_dict)
-            #if iters==0:
-            #    break
             iters += 1
-          #if iters==0:
-          #    break
-          if (not (self.validation_data is None)) and (iters % self.args.eval_every_n == 0):
+          if (self.validation_data is not None) and (iters % self.args.eval_every_n == 0):
             val_dict = {'val_loss': self.evaluate(self.validation_data, self.outer_param, last_layer=u),
                         'val_iters': iters}
-            self.log(val_dict)
-          if (not (self.test_data is None)):
+          if (self.test_data is not None):
             test_dict= {'test_loss': self.evaluate(self.test_data, last_layer=u),
                         'test_iter': iters}
 

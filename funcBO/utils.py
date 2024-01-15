@@ -221,37 +221,6 @@ def set_seed(seed=None):
   torch.backends.cudnn.benchmark = False
   return seed
 
-def tensor_to_state_dict(model, params, device):
-  """
-  A function to wrap a tensor as parameter dictionary of a neural network.
-    param model: neural network
-    param params: a tensor to be wrapped
-  """
-  start = 0
-  current_dict = model.state_dict()
-  for name, param in model.named_parameters():
-      dim = torch.tensor(param.size())
-      length = torch.prod(dim).item()
-      end = start + length
-      new_weights = params[start:end].view_as(param).to(device)
-      current_dict[name] = new_weights
-      start = end
-  return current_dict
-
-def state_dict_to_tensor(model, device):
-  """
-  A function to wrap a tensor as parameter dictionary of a neural network.
-    param model: neural network
-  """
-  start = 0
-  current_tensor_list = []
-  current_dict = model.state_dict()
-  for name, param in model.named_parameters():
-    t = param.clone().detach().flatten()
-    current_tensor_list.append(t)
-  params = (torch.cat(current_tensor_list, 0)).to(device)#put to cuda
-  return params
-
 def get_memory_info():
   """
   Prints cuda's reserved and allocated memory.
@@ -336,44 +305,81 @@ def auxiliary_toy_data():
   print()
   return n, m, X_train, X_val, y_train, y_val, coef
 
-class IVSyntheticData(Dataset):
+def tensor_to_state_dict(model, params, device):
   """
-  A class for input data.
+  A function to wrap a tensor as parameter dictionary of a neural network.
+    param model: neural network
+    param params: a tensor to be wrapped
   """
-  def __init__(self, X, y):
-    self.X = X
-    self.y = y
-    self.len = len(self.y)
+  start = 0
+  current_dict = model.state_dict()
+  for name, param in model.named_parameters():
+      dim = torch.tensor(param.size())
+      length = torch.prod(dim).item()
+      end = start + length
+      new_weights = params[start:end].view_as(param).to(device)
+      current_dict[name] = new_weights
+      start = end
+  return current_dict
 
-  def __getitem__(self, index):
-    # return Z, X, Y
-    return self.X[index][0], self.X[index][1], self.y[index]
+def state_dict_to_tensor(model, device):
+  """
+  A function to wrap a tensor as parameter dictionary of a neural network.
+    param model: neural network
+  """
+  start = 0
+  current_tensor_list = []
+  current_dict = model.state_dict()
+  for name, param in model.named_parameters():
+    t = param.clone().detach().flatten()
+    current_tensor_list.append(t)
+  params = (torch.cat(current_tensor_list, 0)).to(device)#put to cuda
+  return params
 
-  def __len__(self):
-    return self.len
+def assign_device(device):
+    """
+    Assigns a device for PyTorch based on the provided device identifier.
 
-def syntheticIVdata():
-  # Setting the random seed.
-  #set_seed(seed)
-  # Initialize dimesnions
-  n, m = 1, 2048
-  # The data tensor of size (m,n) filled with values uniformally sampled from the range (0,1)
-  Z = np.random.uniform(size=(m, n)).astype('float32')
-  coef_1 = np.random.uniform(size=(1, n)).astype('float32')
-  coef_2 = np.random.uniform(size=(1, n)).astype('float32')
-  X = Z @ coef_1 + np.random.normal(scale=0.1, size=(m,1)).astype('float32')
-  y = X @ coef_2 + np.random.normal(scale=0.1, size=(m,1)).astype('float32')
-  # Put all features together
-  X_full = np.hstack((Z, X))
-  X_train, X_val, y_train, y_val = train_test_split(X_full, y, test_size=0.5, shuffle=True)
-  # Convert everything to PyTorch tensors
-  X_train, X_val, y_train, y_val = (torch.from_numpy(X_train)), (torch.from_numpy(X_val)), (torch.from_numpy(y_train)), (torch.from_numpy(y_val))
-  print("Training feature data shape:", X_train.shape)
-  print("Training feature label shape:", y_train.shape)
-  print("Training feature data:", X_train[1:5])
-  print("Training feature label:", y_train[1:5])
-  print("n:", n, "m:", m)
-  print("coef_1:", coef_1, "coef_2:", coef_2)
-  print("Opt. outer param:", coef_2)
-  print("Opt. inner param:", coef_1*coef_2)
-  return n, m, X_train, X_val, y_train, y_val
+    Parameters:
+    - device (int): Device identifier. If positive, it represents the GPU device
+                   index; if -1, it sets the device to 'cuda'; if -2, it sets
+                   the device to 'cpu'.
+
+    Returns:
+    - device (str): The assigned device, represented as a string. 
+                    'cuda:X' if device > -1 and CUDA is available, where X is 
+                    the provided device index. 'cuda' if device is -1.
+                    'cpu' if device is -2.
+    """
+    if device >-1:
+        device = (
+            'cuda:'+str(device) 
+            if torch.cuda.is_available() and device>-1 
+            else 'cpu'
+        )
+    elif device==-1:
+        device = 'cuda'
+    elif device==-2:
+        device = 'cpu'
+    return device
+
+def get_dtype(dtype):
+    """
+    Returns the PyTorch data type based on the provided integer identifier.
+
+    Parameters:
+    - dtype (int): Integer identifier representing the desired data type.
+                   64 corresponds to torch.double, and 32 corresponds to torch.float.
+
+    Returns:
+    - torch.dtype: PyTorch data type corresponding to the provided identifier.
+
+    Raises:
+    - NotImplementedError: If the provided identifier is not recognized (not 64 or 32).
+    """
+    if dtype==64:
+        return torch.double
+    elif dtype==32:
+        return torch.float
+    else:
+        raise NotImplementedError('Unkown type')

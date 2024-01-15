@@ -5,5 +5,8 @@ A project on bilevel optimization in the context of work at Thoth team INRIA und
 To install dependencies:
 pip install -r dependencies.txt
 
-To install funcBO
+To install funcBO:
 pip install -e .
+
+To launch all IV Regression experiments:
+bash applications/IVRegression/launch.sh
