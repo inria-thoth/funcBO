@@ -312,11 +312,11 @@ class Trainer:
             if (iters % 10 == 0):
                 print(metrics_dict)
             self.log(metrics_dict)
-            if iters==0:
-                break
+            #if iters==0:
+            #    break
             iters += 1
-          if iters==0:
-              break
+          #if iters==0:
+          #    break
           if (not (self.validation_data is None)) and (iters % self.args.eval_every_n == 0):
             val_dict = {'val_loss': self.evaluate(self.validation_data, self.outer_param, last_layer=u),
                         'val_iters': iters}

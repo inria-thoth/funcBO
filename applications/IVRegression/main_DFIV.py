@@ -1,12 +1,12 @@
 import time
 import mlxp
-from training import Trainer
+from DFIVtraining import Trainer
 from funcBO.utils import set_seed 
 
 
 
 
-@mlxp.launch(config_path='configs/funcBO',
+@mlxp.launch(config_path='configs/DFIV',
              seeding_function=set_seed)
 def train(ctx: mlxp.Context)->None:
 
