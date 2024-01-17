@@ -247,7 +247,26 @@ class OuterModel(nn.Module):
                                     nn.Linear(128, 32),#spectral_norm(nn.Linear(128, 32)),
                                     #nn.BatchNorm1d(32),
                                     nn.Tanh()
-            )
+                                )
+
+    def forward(self, x):
+        res = self.model(x)
+        return res
+
+class OuterModelWithNorms(nn.Module):
+    def __init__(self):
+        super(OuterModelWithNorms, self).__init__()
+        self.model = nn.Sequential(spectral_norm(nn.Linear(64 * 64, 1024)),
+                                    nn.ReLU(),
+                                    spectral_norm(nn.Linear(1024, 512)),
+                                    nn.ReLU(),
+                                    nn.BatchNorm1d(512),
+                                    spectral_norm(nn.Linear(512, 128)),
+                                    nn.ReLU(),
+                                    spectral_norm(nn.Linear(128, 32)),
+                                    nn.BatchNorm1d(32),
+                                    nn.Tanh()
+                                )
 
     def forward(self, x):
         res = self.model(x)
@@ -256,19 +275,41 @@ class OuterModel(nn.Module):
 def build_net_for_dsprite(seed, method='sequential'):
     torch.manual_seed(seed)
     sequential = nn.Sequential(nn.Linear(3, 256),#spectral_norm(nn.Linear(3, 256)),
-                                    nn.ReLU(),
-                                    nn.Linear(256, 128),#spectral_norm(nn.Linear(256, 128)),
-                                    nn.ReLU(),
-                                    #nn.BatchNorm1d(128),
-                                    nn.Linear(128, 128),#spectral_norm(nn.Linear(128, 128)),
-                                    nn.ReLU(),
-                                    #nn.BatchNorm1d(128),
-                                    nn.Linear(128, 32),#spectral_norm(nn.Linear(128, 32)),
-                                    #nn.BatchNorm1d(32),
-                                    nn.ReLU()
+                                nn.ReLU(),
+                                nn.Linear(256, 128),#spectral_norm(nn.Linear(256, 128)),
+                                nn.ReLU(),
+                                #nn.BatchNorm1d(128),
+                                nn.Linear(128, 128),#spectral_norm(nn.Linear(128, 128)),
+                                nn.ReLU(),
+                                #nn.BatchNorm1d(128),
+                                nn.Linear(128, 32),#spectral_norm(nn.Linear(128, 32)),
+                                #nn.BatchNorm1d(32),
+                                nn.ReLU()
                             )
     torch.manual_seed(seed)
     response_net = OuterModel()
+    if method == 'sequential':
+        instrumental_net = InnerModel(sequential)
+    elif method == 'sequential+linear':
+        instrumental_net = InnerModelLinearHead(sequential)
+    return instrumental_net, response_net
+
+def build_net_for_dsprite_with_norms(seed, method='sequential'):
+    torch.manual_seed(seed)
+    sequential = nn.Sequential(spectral_norm(nn.Linear(3, 256)),
+                                    nn.ReLU(),
+                                    spectral_norm(nn.Linear(256, 128)),
+                                    nn.ReLU(),
+                                    nn.BatchNorm1d(128),
+                                    spectral_norm(nn.Linear(128, 128)),
+                                    nn.ReLU(),
+                                    nn.BatchNorm1d(128),
+                                    spectral_norm(nn.Linear(128, 32)),
+                                    nn.BatchNorm1d(32),
+                                    nn.ReLU()
+                            )
+    torch.manual_seed(seed)
+    response_net = OuterModelWithNorms()
     if method == 'sequential':
         instrumental_net = InnerModel(sequential)
     elif method == 'sequential+linear':

@@ -33,15 +33,8 @@ class InnerSolution(nn.Module):
                                       'num_iter': 1},  
                      dual_solver_args = {'name': 'funcBO.solver.ClosedFormSolver'}, 
                      dual_model_args = {'name':'funcBO.dual_networks.LinearDualNetwork'},
-                     ): 
-    """
-    Init method.
-      param inner_loss: inner level objective function
-      param inner_dataloader: data loader for inner data
-      param outer_model: either tuple of parameters or nn.Module
-    """
+                     ):
     super(InnerSolution, self).__init__()
-    
     self.inner_model = inner_model
     assert isinstance(self.inner_model,nn.Module)
     dummpy_param = next(inner_model.parameters())
@@ -60,7 +53,6 @@ class InnerSolution(nn.Module):
     self.register_outer_parameters(outer_model)
     self.inner_loss = 0
 
-
   def make_dual(self,dual_model_args, dual_solver_args):
     dual_model_name = dual_model_args['name']
     inner_model_inputs = self.inner_objective.get_inner_model_input()
@@ -72,6 +64,7 @@ class InnerSolution(nn.Module):
       inner_out = self.inner_model(inner_model_inputs)
       assert dual_out.shape==inner_out.shape
     else:
+      # Add comment
       network = self.inner_model
 
     if dual_model_name=='funcBO.dual_networks.LinearDualNetwork':
@@ -80,10 +73,11 @@ class InnerSolution(nn.Module):
     self.dual_model = config_to_instance(**dual_model_args, 
                                           network=network)
 
-    self.dual_objective = DualObjective(self.inner_model, self.inner_objective) # warning: here we really need inner_model and not dual model
+    # Warning: here we really need inner model and not dual model
+    self.dual_objective = DualObjective(self.inner_model, self.inner_objective)
 
     self.dual_solver = config_to_instance(**dual_solver_args,
-                                      model = self.dual_model,
+                                      model=self.dual_model,
                                       objective=self.dual_objective)
     if isinstance(self.dual_solver, ClosedFormSolver):
       assert isinstance(self.dual_model, LinearDualNetwork)
@@ -115,7 +109,7 @@ class InnerSolution(nn.Module):
     else:
       with torch.no_grad():
         self.inner_model.eval()
-        val = self.inner_objective.inner_model(inner_model_inputs)
+        val = self.inner_model(inner_model_inputs)
         return val  
   
   def cross_derivative_dual_prod(self, outer_param, inner_model_inputs, inner_loss_inputs):
@@ -146,10 +140,8 @@ class InnerSolution(nn.Module):
                   retain_graph=False,
                   create_graph=False, 
                   only_inputs=True,
-                  allow_unused=True)[0]    
-    #assert(hessvp.size() == outer_param.size())
+                  allow_unused=True)[0]
     return cdvp
-
 
 
 class ArgMinOp(torch.autograd.Function):
@@ -188,10 +180,9 @@ class ArgMinOp(torch.autograd.Function):
     # Get the inner Z and X
     # Need to enable_grad because we use autograd in optimize_dual (disabled in backward() by default).
     with torch.enable_grad():
-        # Here the model approximating a* needs to be trained on the same X_inner batches
-        # as the h* model was trained on and on X_outer batches that h was evaluated on
-        # in the outer loop where we optimize the outer objective g(outer_param, h).
-      
+      # Here the model approximating a* needs to be trained on the same X_inner batches
+      # as the h* model was trained on and on X_outer batches that h was evaluated on
+      # in the outer loop where we optimize the outer objective g(outer_param, h).
       inner_solution.dual_solver.run(outer_param, inner_model_inputs, outer_grad)
     with torch.no_grad():  
       data = inner_solution.inner_objective.get_data(use_previous_data=True)

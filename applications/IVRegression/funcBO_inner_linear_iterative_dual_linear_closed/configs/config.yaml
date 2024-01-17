@@ -17,7 +17,7 @@ outer_optimizer:
     outer_wd: 0.1
 
 inner_solver:
-    name: 'funcBO.solvers.CompositeSolver'
+    name: 'funcBO.solvers.IterativeSolver'
     optimizer:
         name: 'torch.optim.Adam'
         lr: 0.0001

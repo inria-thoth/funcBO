@@ -8,7 +8,7 @@ from applications.IVRegression.DFIV.trainer import Trainer
 def train(ctx: mlxp.Context) -> None:
     try:
         # Attempt to load the latest checkpoint using the logger from the MLXP context
-        training = ctx.logger.load_checkpoint(log_name='last_ckpt')
+        trainer = ctx.logger.load_checkpoint(log_name='last_ckpt')
         print("Loading from the latest checkpoint")
     except:
         # If loading the checkpoint fails, print a message and start training from scratch

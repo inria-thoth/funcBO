@@ -1,11 +1,11 @@
 seed: 42
-batch_size: 2500
+batch_size: 2450
 max_epochs: 100
 eval_every_n: 1
 lam_u: 0.1
 lam_V: 0.2
 data_size: 5000
-val_size: 0
+val_size: 100
 split_ratio: 0.5
 
 system:
@@ -25,7 +25,15 @@ inner_solver:
     num_iter: 20
 
 dual_solver:
-    name: 'funcBO.solvers.ClosedFormSolver'
+    name: 'funcBO.solvers.IterativeSolver'
+    optimizer:
+        # SGD might be better here since dual network is linear
+        name: 'torch.optim.Adam'
+        lr: 0.0001
+        # this matches DFIV lam_1 because the reg. is added in the gradient update as 2*lam_1=lam_V
+        weight_decay: 0.2
+    num_iter: 20
+
 dual_model:
     name: 'funcBO.dual_networks.LinearDualNetwork'
 

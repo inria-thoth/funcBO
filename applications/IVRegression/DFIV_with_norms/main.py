@@ -1,6 +1,6 @@
 import mlxp
 from funcBO.utils import set_seed 
-from applications.IVRegression.funcBO.trainer import Trainer
+from applications.IVRegression.DFIV.trainer import Trainer
 
 @mlxp.launch(config_path='./configs',
              seeding_function=set_seed)
@@ -14,8 +14,7 @@ def train(ctx: mlxp.Context) -> None:
         # If loading the checkpoint fails, print a message and start training from scratch
         print("Failed to load the checkpoint, starting from scratch")
         # Create a new instance of the Trainer class with the configuration and logger from the MLXP context
-        # Check if the run logs (in ctx.logger) already exist, if so, delete them here (only .json files)
-        trainer = Trainer(ctx.config, ctx.logger)
+        trainer = Trainer(ctx.config, ctx.logger, NNs_with_norms=True)
 
     # Call the train method of the Trainer instance
     trainer.train()

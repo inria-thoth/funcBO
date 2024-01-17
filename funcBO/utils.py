@@ -383,35 +383,3 @@ def get_dtype(dtype):
         return torch.float
     else:
         raise NotImplementedError('Unkown type')
-
-
-
-def plot_loss_from_json(json_paths, column_name):
-    """
-    Plot the loss values from JSON files over iterations.
-    :param json_paths: list of paths to JSON files
-    :param column_name: name of the column to plot
-    """
-    plt.clf()
-    plt.figure(figsize=(5, 4))
-
-    for json_path in json_paths:
-        with open(json_path, 'r') as json_file:
-            # Read lines from the file and parse each line separately
-            data = [json.loads(line) for line in json_file]
-
-        # Extract values from the JSON data
-        iterations = [entry['iter'] for entry in data]
-        loss_values = [entry.get(column_name, None) for entry in data]
-
-        # Plot loss
-        plt.plot(iterations, loss_values, label=f'{json_path[-30:-10]}')
-
-    plt.yscale('log')
-    plt.xlabel('Iterations')
-    plt.ylabel(column_name)
-    plt.legend(loc='best')
-
-    # Save the plot
-    plt.tight_layout()
-    plt.savefig(column_name + ".png")
