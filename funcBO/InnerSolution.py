@@ -28,10 +28,11 @@ class InnerSolution(nn.Module):
                      inner_dataloader,
                      inner_data_projector, 
                      outer_model,
+                     outer_param,
                      inner_solver_args = {'name': 'funcBO.solver.IterativeSolver',
                                       'optimizer': {'name':'torch.optim.SGD'},
                                       'num_iter': 1},  
-                     dual_solver_args = {'name': 'funcBO.solver.ClosedFormSolver'}, 
+                     dual_solver_args = {'name': 'funcBO.solver.ClosedFormSolver', 'input_dim': 1, 'output_dim': 1}, 
                      dual_model_args = {'name':'funcBO.dual_networks.LinearDualNetwork'},
                      ):
     super(InnerSolution, self).__init__()
@@ -50,25 +51,23 @@ class InnerSolution(nn.Module):
                                       objective=self.inner_objective)
 
     self.make_dual(dual_model_args, dual_solver_args)
-    self.register_outer_parameters(outer_model)
+    self.outer_model = outer_model
+    self.register_outer_parameters(outer_param)
     self.inner_loss = 0
 
-  def make_dual(self,dual_model_args, dual_solver_args):
+  def make_dual(self, dual_model_args, dual_solver_args):
     dual_model_name = dual_model_args['name']
     inner_model_inputs = self.inner_objective.get_inner_model_input()
 
     if 'network' in dual_model_args:
-      # if a custom network is provided it needs to have the same input and output spaces as the inner model. 
+      # If a custom network is provided it needs to have the same input and output spaces as the inner model. 
       network = config.pop('network')
       dual_out =  network(inner_model_inputs)
       inner_out = self.inner_model(inner_model_inputs)
       assert dual_out.shape==inner_out.shape
     else:
-      # Add comment
+      # If no custom network is provided we use the inner model as the dual network
       network = self.inner_model
-
-    if dual_model_name=='funcBO.dual_networks.LinearDualNetwork':
-      dual_model_args['network_inputs'] = inner_model_inputs
 
     self.dual_model = config_to_instance(**dual_model_args, 
                                           network=network)
@@ -160,7 +159,6 @@ class ArgMinOp(torch.autograd.Function):
     with torch.enable_grad():
       # Train the model to approximate h* at outer_param_k
       inner_solution.inner_solver.run(outer_param)
-      # Put optimize to False?
     # Remember the value h*(Z_outer)
     inner_model.eval()
     with torch.no_grad():
@@ -178,6 +176,11 @@ class ArgMinOp(torch.autograd.Function):
     # Get the saved tensors
     outer_param, inner_model_inputs, inner_value = ctx.saved_tensors
     # Get the inner Z and X
+    # Gradient computation should be in train mode?
+    #inner_solution.outer_model.eval()
+    # Save the buffers here, reset at the start of every iteration of dual optimizer?
+    #torch.save(inner_solution.outer_model.state_dict(), './outer_model_state')
+    #inner_solution.outer_model.load_state_dict(torch.load('./outer_model_state'))
     # Need to enable_grad because we use autograd in optimize_dual (disabled in backward() by default).
     with torch.enable_grad():
       # Here the model approximating a* needs to be trained on the same X_inner batches
@@ -189,5 +192,4 @@ class ArgMinOp(torch.autograd.Function):
       inner_model_inputs, inner_loss_inputs =  inner_solution.inner_objective.data_projector(data)
     with torch.enable_grad():
       grad = inner_solution.cross_derivative_dual_prod(outer_param, inner_model_inputs, inner_loss_inputs)
-
     return None, grad, None

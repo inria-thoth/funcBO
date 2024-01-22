@@ -19,8 +19,9 @@ class LinearDualNetwork(DualNetwork):
   Outer layer is the layer that gives the features phi(Z),
   by default none, then just takes the layer before the last.
   """
-  def __init__(self,network, 
-                    network_inputs,
+  def __init__(self, network, 
+                    input_dim,
+                    output_dim,
                     output_layer = None):
     super(LinearDualNetwork,self).__init__(network)
     if not output_layer:
@@ -38,13 +39,12 @@ class LinearDualNetwork(DualNetwork):
     dtype = dummpy_param.dtype
 
     self.model_with_hook = ModelWithHook(output_layer,network)
-    
-    out, selected_out = self.model_with_hook(network_inputs)
-    self.out_shape = out.shape[1:]
-    in_dim = selected_out.flatten(start_dim=1).shape[1]
-    out_dim = out.flatten(start_dim=1).shape[1]
+    #out, selected_out = self.model_with_hook(network_inputs)
+    self.out_shape = torch.Size([output_dim])#out.shape[1:]
+    #in_dim = selected_out.flatten(start_dim=1).shape[1]
+    #out_dim = out.flatten(start_dim=1).shape[1]
 
-    self.linear = torch.nn.Linear(in_dim+1, out_dim,bias=False, 
+    self.linear = torch.nn.Linear(input_dim+1, output_dim, bias=False, 
                                 device=device, 
                                 dtype=dtype)
 
@@ -57,7 +57,7 @@ class LinearDualNetwork(DualNetwork):
                         device=selected_out.device)
       selected_out = torch.cat((selected_out,ones),dim=1)
     out = self.linear(selected_out)
-    out = torch.unflatten(out,dim=1,sizes=self.out_shape)
+    out = torch.unflatten(out, dim=1, sizes=self.out_shape)
     if with_features:
       return out, selected_out 
     else:

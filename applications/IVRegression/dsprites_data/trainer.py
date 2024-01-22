@@ -92,7 +92,6 @@ def fit_2n_stage(instrumental_2nd_feature,
     return dict(stage2_weight=stage2_weight,
                 stage2_loss=stage2_loss)
 
-
 class DFIVTrainer:
     """
     Solves an instrumental regression problem using the DFIV method.
@@ -117,6 +116,17 @@ class DFIVTrainer:
         self.instrumental_opt = instrumental_opt
         self.logger = logger
 
+    def log(self,dico, log_name='metrics'):
+        self.logger.log_metrics(dico, log_name=log_name)
+
+    def log_metrics_list(self, dico_list, iteration, prefix="", log_name='metrics'):
+        total_iter = len(dico_list)
+        for dico in dico_list:
+            dico['outer_iter'] = iteration
+            dico['iter'] = iteration*total_iter + dico['inner_iter']
+            dico = {prefix+key:value for key,value in dico.items()}
+            self.log(dico, log_name=log_name)
+
     def train(self, stage1_dataset, stage2_dataset, test_dataset):
         """
         Solves the IV regression problem.
@@ -127,12 +137,14 @@ class DFIVTrainer:
             metrics_dict = {}
             metrics_dict['iter'] = epoch
             self.stage1_update(stage1_dataset)
+            self.log_metrics_list(self.inner_log, epoch, log_name='inner_metrics')
             stage2_res = self.stage2_update(stage1_dataset, stage2_dataset)
-            metrics_dict['outer_loss']= stage2_res["stage2_loss"].item()
-            test_loss = self.evaluate(test_dataset, stage2_res["stage2_weight"])
-            metrics_dict['test_loss'] = test_loss.item()
+            metrics_dict['outer_loss'] = stage2_res["stage2_loss"].item()
             self.logger.log_metrics(metrics_dict, log_name='metrics')
             print(metrics_dict)
+        test_log = [{'inner_iter': 0,
+                    'test loss': (self.evaluate(stage1_dataset, stage2_dataset, test_dataset)).item()}]
+        self.log_metrics_list(test_log, 0, log_name='test_metrics')
 
     def stage1_update(self, stage1_dataset):
         """
@@ -144,12 +156,16 @@ class DFIVTrainer:
         # Get the value of f(X)
         treatment_feature = self.treatment_net(stage1_dataset.treatment).detach()
         # Train the feature mapping g(Z)
+        self.inner_log = []
         for i in range(self.stage1_iter):
             self.instrumental_opt.zero_grad()
             # Get the value of g(Z)
             instrumental_feature = self.instrumental_net(stage1_dataset.instrumental)
             feature = augment_stage1_feature(instrumental_feature)
             loss = linear_reg_loss(treatment_feature, feature, self.lam1)
+            print(loss.item())
+            self.inner_log.append({'inner_iter': i,
+                                    'loss': loss.item()})
             loss.backward()
             self.instrumental_opt.step()
             
@@ -175,13 +191,27 @@ class DFIVTrainer:
             self.treatment_opt.step()
         return res
     
-    def evaluate(self, test_dataset, u):
+    def evaluate(self, stage1_dataset, stage2_dataset, test_dataset):
         """
         Evaluate the prediction quality on the test dataset.
         """
         self.treatment_net.train(False)
         self.instrumental_net.train(False)
-        # Get the value of f(X)
-        treatment_feature = self.treatment_net(test_dataset.treatment).detach()
-        loss = MSE((treatment_feature @ u[:-1]) + u[-1], test_dataset.structural)
+        with torch.no_grad():
+            treatment_1st_feature = self.treatment_net(stage1_dataset.treatment).detach()
+            instrumental_1st_feature = self.instrumental_net(stage1_dataset.instrumental).detach()
+            instrumental_2nd_feature = self.instrumental_net(stage2_dataset.instrumental).detach()
+            feature = augment_stage1_feature(instrumental_1st_feature)
+            stage1_weight = fit_linear(treatment_1st_feature, feature, self.lam1)
+            feature = augment_stage1_feature(instrumental_2nd_feature)
+            predicted_treatment_feature = linear_reg_pred(feature, stage1_weight)
+            feature = augment_stage2_feature(predicted_treatment_feature)
+            stage2_weight = fit_linear(stage2_dataset.outcome, feature, self.lam2)
+            Y_test = test_dataset.structural
+            X_test = test_dataset.treatment
+            treatment_feature = self.treatment_net(X_test).detach()
+            test_feature = augment_stage2_feature(treatment_feature)
+            test_pred = linear_reg_pred(test_feature, stage2_weight)
+            loss = (torch.norm((Y_test - test_pred)) ** 2) / Y_test.size(0)
         return loss
+

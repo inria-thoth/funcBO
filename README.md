@@ -8,5 +8,11 @@ pip install -r dependencies.txt
 To install funcBO:
 pip install -e .
 
-To launch all IV Regression experiments:
-bash applications/IVRegression/launch.sh
+To launch funcBO:
+python applications/IVRegression/funcBO/main.py
+
+To launch DFIV:
+python applications/IVRegression/DFIV/main.py
+
+To launch an experiment:
+bash applications/IVRegression/launch_DFIV_funcBO.sh

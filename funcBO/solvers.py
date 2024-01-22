@@ -75,6 +75,7 @@ class CompositeSolver(Solver):
       loss, weight = self.reg_objective(*objective_args, inner_model_outputs, inner_loss_inputs)
       self.data_logs.append({'inner_iter': i,
                               'loss': loss.item()})
+      print(loss.item())
       loss.backward()
       self.optimizer.step()
       # Here we do one more fit to get the closed-form weights of the last linear layer
@@ -83,7 +84,7 @@ class CompositeSolver(Solver):
           self.model.eval()
 
           inner_model_outputs = self.model.model(inner_model_inputs)
-          loss, weight = self.reg_objective(*objective_args, inner_model_outputs, inner_loss_inputs)
+          loss, weight = self.reg_objective(*objective_args, inner_model_outputs, inner_loss_inputs, backward_mode=True)
       # Set last linear layer weights with their closed form values
       self.model.linear.weight.data = weight.t().detach()
 

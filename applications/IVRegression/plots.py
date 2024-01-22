@@ -3,7 +3,7 @@ import numpy as np
 import os
 import json
 
-def plot_line_loss_from_json(json_paths, column_name, metrics_file="metrics"):
+def plot_line_loss_from_json(json_paths, column_name, metrics_file="metrics", vertical_axis_scale="log"):
     """
     Plot the average loss curve with standard deviation from JSON files over iterations.
     :param json_paths: list of paths to directories containing JSON files
@@ -53,7 +53,8 @@ def plot_line_loss_from_json(json_paths, column_name, metrics_file="metrics"):
         plt.plot(iterations, mean_values, label=label, linewidth=2, color=color)
         plt.fill_between(iterations, mean_values - std_values, mean_values + std_values, color=color, alpha=0.1)
 
-    plt.yscale('log')
+    plt.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+    plt.yscale(vertical_axis_scale)
     plt.xlabel('Iterations')
     plt.ylabel(column_name)
     plt.legend(loc='best')
@@ -63,7 +64,7 @@ def plot_line_loss_from_json(json_paths, column_name, metrics_file="metrics"):
     plt.savefig("figures/" + column_name + metrics_file + ".png")
 
 
-def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics"):
+def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", vertical_axis_scale="log"):
     """
     Plot box plots for the loss values from JSON files over iterations.
     :param json_paths: list of paths to directories containing JSON files
@@ -120,12 +121,16 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics"):
     plt.ylabel(column_name)
     plt.tight_layout()
     plt.grid(True, linewidth=0.5)
-    plt.yticks([1, 10, 30])  # Set y-axis ticks
+    plt.yscale(vertical_axis_scale)
+    plt.yticks([1, 3, 10, 30])  # Set y-axis ticks
     plt.savefig("figures/" + column_name + metrics_file + ".png")
 
-json_paths = ["/home/ipetruli/funcBO/applications/data/outputs/dfiv", "/home/ipetruli/funcBO/applications/data/outputs/funcBO", "/home/ipetruli/funcBO/applications/data/outputs/DFIV_with_norms", "/home/ipetruli/funcBO/applications/data/outputs/funcBO_inner_linear_composite_dual_linear_iterative", "/home/ipetruli/funcBO/applications/data/outputs/funcBO_inner_linear_iterative_dual_linear_closed"]
-plot_line_loss_from_json(json_paths, "outer_loss", metrics_file="metrics")
-plot_line_loss_from_json(json_paths, "val_loss", metrics_file="metrics")
-plot_line_loss_from_json(json_paths, "test_loss", metrics_file="metrics")
-plot_line_loss_from_json(json_paths, "loss", metrics_file="inner_metrics")
-plot_line_loss_from_json(json_paths, "loss", metrics_file="dual_metrics")
+# shared root
+json_paths = ["/home/ipetruli/funcBO/applications/data/outputs/my_dfiv", "/home/ipetruli/funcBO/applications/data/outputs/funcBO", "/home/ipetruli/funcBO/applications/data/outputs/dfiv_original", "/home/ipetruli/funcBO/applications/data/outputs/dfiv_batchnorm", "/home/ipetruli/funcBO/applications/data/outputs/dfiv_layernorm"]#, "/home/ipetruli/funcBO/applications/data/outputs/DFIV_with_norms", "/home/ipetruli/funcBO/applications/data/outputs/funcBO_inner_linear_composite_dual_linear_iterative", "/home/ipetruli/funcBO/applications/data/outputs/funcBO_inner_linear_iterative_dual_linear_closed", "/home/ipetruli/funcBO/applications/data/outputs/funcBO_with_norms"]
+#json_paths = ["/home/ipetruli/funcBO/applications/data/outputs/DFIV_with_norms", "/home/ipetruli/funcBO/applications/data/outputs/funcBO_with_norms"]
+# dict of json_paths, label
+#plot_line_loss_from_json(json_paths, "outer_loss", metrics_file="metrics")
+#plot_line_loss_from_json(json_paths, "val_loss", metrics_file="metrics")
+#plot_line_loss_from_json(json_paths, "loss", metrics_file="inner_metrics")
+#plot_line_loss_from_json(json_paths, "loss", metrics_file="dual_metrics")
+plot_box_loss_from_json(json_paths, "test loss", metrics_file="test_metrics")#, vertical_axis_scale="linear")

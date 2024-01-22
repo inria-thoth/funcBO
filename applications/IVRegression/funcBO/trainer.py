@@ -2,7 +2,7 @@ import torch
 from applications.IVRegression.dsprites_data.trainer import *
 from applications.IVRegression.dsprites_data.generator import *
 import time
-from funcBO.utils import assign_device, get_dtype, state_dict_to_tensor, tensor_to_state_dict
+from funcBO.utils import assign_device, get_dtype, tensor_to_state_dict, state_dict_to_tensor
 from torch.utils.data import DataLoader
 from torch.nn import MSELoss
 from funcBO.InnerSolution import InnerSolution
@@ -54,10 +54,10 @@ class Trainer:
 
         # Scaling of the regularization parameters
         inner_data_size = inner_data[0].size(0)
-        lam_V = self.args.lam_V
-        lam_u = self.args.lam_u*outer_data[0].size(0)
+        self.lam_V = self.args.lam_V
+        self.lam_u = self.args.lam_u*outer_data[0].size(0)
         # Scaled reg. param. (following the DFIV setting)
-        Nlam_V= 0.5*lam_V*inner_data_size
+        self.Nlam_V= 0.5*self.lam_V*inner_data_size
 
         # Dataloaders for inner and outer data
         inner_data = DspritesTrainData(inner_data)
@@ -70,10 +70,10 @@ class Trainer:
             self.validation_data = validation_data
 
         # Neural networks for dsprites data
-        if self.NNs_with_norms:
-            self.inner_model, self.outer_model = build_net_for_dsprite_with_norms(self.args.seed, method='sequential+linear')
-        else:
-            self.inner_model, self.outer_model = build_net_for_dsprite(self.args.seed, method='sequential+linear')
+        #if self.NNs_with_norms:
+        self.inner_model, self.outer_model = build_net_for_dsprite_with_norms(self.args.seed, method='sequential+linear')
+        #else:
+        #    self.inner_model, self.outer_model = build_net_for_dsprite(self.args.seed, method='sequential+linear')
         self.inner_model.to(device)
         self.outer_model.to(device)
         
@@ -95,43 +95,52 @@ class Trainer:
         def ridge_func(weight,lam):
             return lam * torch.norm(weight) ** 2
 
-        reg_func = lambda weight: ridge_func(weight, lam_V)
+        reg_func = lambda weight: ridge_func(weight, self.lam_V)
 
         # Outer objective function
         def fo(g_z_out, Y):
+            self.outer_model.train(True)
             res = fit_2n_stage(
                             g_z_out, 
                             Y,  
-                            lam_u)
-            return res["stage2_loss"], res["stage2_weight"]
+                            self.lam_u)
+            return res["stage2_loss"]
 
         # Inner objective function that depends only on the inner prediction
-        def fi(outer_param, instrumental_feature, X):
+        def fi(outer_param, instrumental_feature, X):#, backward_mode=False):
+            #if backward_mode:
+            #    self.outer_model.train(True)
+            #else:
+            #    self.outer_model.train(False)
             outer_NN_dic = tensor_to_state_dict(self.outer_model, 
-                                                self.outer_param, 
+                                                outer_param, 
                                                 device)
             treatment_feature = (torch.func.functional_call(self.outer_model, 
                                 parameter_and_buffer_dicts=outer_NN_dic, 
-                                args=X, 
+                                args=X,
                                 strict=True))
             # Fix reg. here, extract weight from the inner NN last linear layer
-            loss = torch.norm((instrumental_feature - treatment_feature)) ** 2#+ ridge_func(weight, Nlam_V)
+            loss = torch.norm((instrumental_feature - treatment_feature)) ** 2 + ridge_func(self.inner_model.linear.weight, self.Nlam_V)
             return loss
 
         # Inner objective function with regularization
-        def reg_objective(outer_param, instrumental_feature, X):
-            outer_NN_dic = tensor_to_state_dict(self.outer_model, 
-                                                self.outer_param, 
-                                                device)
+        def reg_objective(outer_param, instrumental_feature, X, backward_mode=False):
+            if backward_mode:
+                self.outer_model.train(True)
+            else:
+                self.outer_model.train(False)
+            outer_NN_dic = tensor_to_state_dict(self.outer_model,
+                                                    outer_param,
+                                                    device)
             treatment_feature = (torch.func.functional_call(self.outer_model, 
                                 parameter_and_buffer_dicts=outer_NN_dic, 
                                 args=X, 
                                 strict=True))
             # Get the value of g(Z)
             feature = augment_stage1_feature(instrumental_feature)
-            weight = fit_linear(treatment_feature, feature, Nlam_V)
+            weight = fit_linear(treatment_feature, feature, self.Nlam_V)
             pred = linear_reg_pred(feature, weight)
-            loss = torch.norm((treatment_feature - pred)) ** 2 + ridge_func(weight,Nlam_V)
+            loss = torch.norm((treatment_feature - pred)) ** 2 + ridge_func(weight,self.Nlam_V)
             return loss, weight
 
         def projector(data):
@@ -156,10 +165,10 @@ class Trainer:
             self.args.dual_solver['reg_objective'] = reg_objective
 
         if self.args.dual_solver['name']=='funcBO.solvers.ClosedFormSolver':
-            self.args.dual_solver['reg'] = lam_V
+            self.args.dual_solver['reg'] = self.lam_V
 
         if self.args.dual_solver['name']=='funcBO.solvers.IVClosedFormSolver':
-            self.args.dual_solver['reg'] = lam_V
+            self.args.dual_solver['reg'] = self.lam_V
         
         self.inner_loss = fi
         self.outer_loss = fo
@@ -168,11 +177,13 @@ class Trainer:
                                             self.inner_loss, 
                                             self.inner_dataloader,
                                             projector,
+                                            self.outer_model,
                                             self.outer_param,
                                             dual_model_args = self.args.dual_model,
                                             inner_solver_args = self.args.inner_solver,
                                             dual_solver_args= self.args.dual_solver
                                             )
+
 
     def train(self):
         """
@@ -187,22 +198,20 @@ class Trainer:
                 start = time.time()
                 # Move data to GPU
                 Z_outer = Z.to(self.device, dtype=torch.float)
-                X_outer = X.to(self.device, dtype=torch.float)
                 Y_outer = Y.to(self.device, dtype=torch.float)
                 # Inner value corresponds to h*(Z)
                 forward_start = time.time()
                 # Get the value of h*(Z_outer)
                 inner_value = self.inner_solution(Z_outer)
-                loss, u = self.outer_loss(inner_value, Y_outer)
+                loss = self.outer_loss(inner_value, Y_outer)
                 # Backpropagation
                 self.outer_optimizer.zero_grad()
                 backward_start = time.time()
                 loss.backward()
                 self.outer_optimizer.step()
                 metrics_dict['outer_loss'] = loss.item()
-                metrics_dict['test_loss'] = (self.evaluate(last_layer=u, data_type="test")).item()
                 if self.validation_data is not None:
-                    metrics_dict['val_loss'] = (self.evaluate(last_layer=u, data_type="validation")).item()
+                    metrics_dict['val_loss'] = (self.evaluate(data_type="validation")).item()
                 inner_logs = self.inner_solution.inner_solver.data_logs
                 if inner_logs:
                     self.log_metrics_list(inner_logs, self.iters, log_name='inner_metrics')
@@ -215,8 +224,11 @@ class Trainer:
                 done = (self.iters >= self.args.max_epochs)
                 if done:
                     break
+        test_log = [{'inner_iter': 0,
+                    'test loss': (self.evaluate(data_type="test")).item()}]
+        self.log_metrics_list(test_log, 0, log_name='test_metrics')
 
-    def evaluate(self, last_layer=None, data_type="validation"):
+    def evaluate(self, data_type="validation"):
         """
         Evaluates the performance of the model on the given data.
 
@@ -227,24 +239,52 @@ class Trainer:
         Returns:
         - float: The evaluation loss on the provided data.
         """
+        outer_NN_dic = tensor_to_state_dict(self.outer_model, self.outer_param, self.device)
+        previous_state_outer_model = self.outer_model.training
+        previous_state_inner_solution = self.inner_solution.training
+        previous_state_inner_model = self.inner_model.training
         self.outer_model.eval()
         self.inner_solution.eval()
+        self.inner_model.eval()
         with torch.no_grad():
-            if data_type=="test":
-                Y = self.test_data.structural
-                X = self.test_data.treatment
-                outer_NN_dic = tensor_to_state_dict(self.outer_model, self.outer_param, self.device)
-                stage2_feature = torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X)
+            if data_type == "test":
+                for Z, X, Y in self.outer_dataloader:
+                    Z_outer = Z.to(self.device, dtype=torch.float)
+                    Y_outer = Y.to(self.device, dtype=torch.float)
+                for Z, X, Y in self.inner_dataloader:
+                    Z_inner = Z.to(self.device, dtype=torch.float)
+                    X_inner = X.to(self.device, dtype=torch.float)
+                treatment_1st_feature = torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_inner)
+                instrumental_1st_feature = self.inner_model.model(Z_inner)
+                instrumental_2nd_feature = self.inner_model.model(Z_outer)
+                feature = augment_stage1_feature(instrumental_1st_feature)
+                stage1_weight = fit_linear(treatment_1st_feature, feature, self.Nlam_V)
+                feature = augment_stage1_feature(instrumental_2nd_feature)
+                predicted_treatment_feature = linear_reg_pred(feature, stage1_weight)
+                feature = augment_stage2_feature(predicted_treatment_feature)
+                stage2_weight = fit_linear(Y_outer, feature, self.lam_u)
+                Y_test = self.test_data.structural
+                X_test = self.test_data.treatment
+                treatment_feature = torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_test)
+                test_feature = augment_stage2_feature(treatment_feature)
+                test_pred = linear_reg_pred(test_feature, stage2_weight)
+                loss = (torch.norm((Y_test - test_pred)) ** 2) / Y_test.size(0)
+
+                #mdl.fit_t(train_1st_t, train_2nd_t, self.lam1, self.lam2)
+                #oos_loss: float = mdl.evaluate_t(test_data_t).data.item()
                 #loss = self.MSE((pred @ last_layer[:-1] + last_layer[-1]), Y)
-            elif data_type=="validation":
-                Y = self.validation_data.outcome
-                Z = self.validation_data.instrumental
-                stage2_feature = self.inner_solution(Z)
-            feature = augment_stage2_feature(stage2_feature)
-            pred = linear_reg_pred(feature, last_layer)
-            loss = self.MSE(pred, Y)
-        self.outer_model.train()
-        self.inner_solution.train()
+            #elif data_type=="validation":
+                #Y = self.validation_data.outcome
+                #Z = self.validation_data.instrumental
+                #stage2_feature = self.inner_solution(Z)
+            #feature = augment_stage2_feature(stage2_feature)
+            #pred = linear_reg_pred(feature, last_layer)
+            #loss = self.MSE(pred, Y)
+        #self.outer_model.train()
+        #self.inner_solution.train()
+        self.outer_model.train(previous_state_outer_model)
+        self.inner_solution.train(previous_state_inner_solution)
+        self.inner_model.train(previous_state_inner_model)
         return loss
 
 

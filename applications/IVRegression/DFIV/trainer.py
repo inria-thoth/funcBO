@@ -41,10 +41,10 @@ class Trainer:
         self.test_data = TestDataSetTorch.from_numpy(test_data, device=device, dtype=self.dtype)
 
         # Neural networks for dsprites data
-        if self.NNs_with_norms:
-            instrumental_network, treatment_network = build_net_for_dsprite_with_norms(self.args.seed, method='sequential')
-        else:
-            instrumental_network, treatment_network = build_net_for_dsprite(self.args.seed, method='sequential')
+        #if self.NNs_with_norms:
+        instrumental_network, treatment_network = build_net_for_dsprite_with_norms(self.args.seed, method='sequential')
+        #else:
+        #    instrumental_network, treatment_network = build_net_for_dsprite(self.args.seed, method='sequential')
         instrumental_network.to(device)
         treatment_network.to(device)
 

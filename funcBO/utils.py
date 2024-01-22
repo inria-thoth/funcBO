@@ -30,7 +30,7 @@ def import_module(module_name):
         except:
             return eval(module+attr[1:])
 
-def config_to_instance(config_module_name="name",**config):
+def config_to_instance(config_module_name="name", **config):
   module_name = config.pop(config_module_name)
   attr = import_module(module_name)
   if config:
@@ -383,3 +383,51 @@ def get_dtype(dtype):
         return torch.float
     else:
         raise NotImplementedError('Unkown type')
+
+def params_buffers_to_tensor(model, device):
+    """
+    A function to wrap a tensor as parameter dictionary of a neural network.
+    :param model: neural network
+    :param device: device to which the resulting tensor should be moved
+    """
+    current_tensor_list = []
+
+    # Iterate over parameters
+    for name, param in model.named_parameters():
+        t = param.clone().detach().flatten()
+        current_tensor_list.append(t)
+
+    # Iterate over buffers (including those used by LayerNorm)
+    for name, buffer in model.named_buffers():
+        t = buffer.clone().detach().flatten()
+        current_tensor_list.append(t)
+
+    # Concatenate all tensors and move to the specified device
+    params = torch.cat(current_tensor_list, 0).to(device)
+    return params
+
+def tensor_to_params_buffers(model, params, device):
+    """
+    A function to transorm a tensor to parameters and buffers state dictionary of a neural network.
+    :param model: neural network
+    :param params: tensor containing flattened parameters and buffers
+    :param device: device to which the parameters and buffers should be moved
+    """
+    start = 0
+    state_dict = model.state_dict()
+
+    # Iterate over parameters
+    for name, param in model.named_parameters():
+        param_size = torch.prod(torch.tensor(param.shape))
+        param_flat = params[start : start + param_size].view(param.shape)
+        state_dict[name] = param_flat.to(device)
+        start += param_size
+
+    # Iterate over buffers (including those used by LayerNorm)
+    for name, buffer in model.named_buffers():
+        buffer_size = torch.prod(torch.tensor(buffer.shape))
+        buffer_flat = params[start : start + buffer_size].view(buffer.shape)
+        state_dict[name] = buffer_flat.to(device)
+        start += buffer_size
+    
+    return state_dict

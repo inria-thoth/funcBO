@@ -1,6 +1,6 @@
 seed: 42
 batch_size: 2500
-max_epochs: 100
+max_epochs: 2
 eval_every_n: 1
 lam_u: 0.1
 lam_V: 0.2
@@ -13,14 +13,14 @@ system:
     dtype: 32
  
 outer_optimizer:
-    outer_lr: 0.0001
+    outer_lr: 0.001
     outer_wd: 0.1
 
 inner_solver:
     name: 'funcBO.solvers.CompositeSolver'
     optimizer:
         name: 'torch.optim.Adam'
-        lr: 0.0001
+        lr: 0.001
         weight_decay: 0.1
     num_iter: 20
 
@@ -28,6 +28,8 @@ dual_solver:
     name: 'funcBO.solvers.ClosedFormSolver'
 dual_model:
     name: 'funcBO.dual_networks.LinearDualNetwork'
+    input_dim: 32
+    output_dim: 32
 
 
 

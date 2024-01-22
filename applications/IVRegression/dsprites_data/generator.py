@@ -12,6 +12,7 @@ from numpy.random import default_rng
 from torch.nn.utils import spectral_norm
 from typing import NamedTuple, Optional, Tuple
 from sklearn.model_selection import train_test_split
+from funcBO.utils import set_seed
 
 class TrainDataSet(NamedTuple):
     treatment: np.ndarray
@@ -260,11 +261,11 @@ class OuterModelWithNorms(nn.Module):
                                     nn.ReLU(),
                                     spectral_norm(nn.Linear(1024, 512)),
                                     nn.ReLU(),
-                                    nn.BatchNorm1d(512),
+                                    nn.LayerNorm(512),#nn.BatchNorm1d(512),
                                     spectral_norm(nn.Linear(512, 128)),
                                     nn.ReLU(),
                                     spectral_norm(nn.Linear(128, 32)),
-                                    nn.BatchNorm1d(32),
+                                    nn.LayerNorm(32),#nn.BatchNorm1d(32),
                                     nn.Tanh()
                                 )
 
@@ -295,20 +296,20 @@ def build_net_for_dsprite(seed, method='sequential'):
     return instrumental_net, response_net
 
 def build_net_for_dsprite_with_norms(seed, method='sequential'):
-    torch.manual_seed(seed)
+    set_seed(seed)
     sequential = nn.Sequential(spectral_norm(nn.Linear(3, 256)),
                                     nn.ReLU(),
                                     spectral_norm(nn.Linear(256, 128)),
                                     nn.ReLU(),
-                                    nn.BatchNorm1d(128),
+                                    nn.LayerNorm(128),#nn.BatchNorm1d(128),
                                     spectral_norm(nn.Linear(128, 128)),
                                     nn.ReLU(),
-                                    nn.BatchNorm1d(128),
+                                    nn.LayerNorm(128),#nn.BatchNorm1d(128),
                                     spectral_norm(nn.Linear(128, 32)),
-                                    nn.BatchNorm1d(32),
+                                    nn.LayerNorm(32),#nn.BatchNorm1d(32),
                                     nn.ReLU()
                             )
-    torch.manual_seed(seed)
+    set_seed(seed)
     response_net = OuterModelWithNorms()
     if method == 'sequential':
         instrumental_net = InnerModel(sequential)
