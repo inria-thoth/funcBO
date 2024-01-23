@@ -16,7 +16,7 @@ from funcBO.solvers import ClosedFormSolver
 from funcBO.dual_networks import LinearDualNetwork
 
 
-from funcBO.utils import config_to_instance
+from funcBO.utils import config_to_instance, tensor_to_state_dict
 
 class InnerSolution(nn.Module):
   """
@@ -44,6 +44,7 @@ class InnerSolution(nn.Module):
 
     self.inner_objective = Objective(inner_loss,
                                       inner_dataloader, inner_data_projector,
+                                      outer_model,
                                       self.device, self.dtype)
 
     self.inner_solver = config_to_instance(**inner_solver_args, 
@@ -93,6 +94,14 @@ class InnerSolution(nn.Module):
     elif isinstance(outer_model,nn.parameter.Parameter):
       self.register_parameter(name="outer_param", param=outer_model)
 
+  def update_model_params(self):
+      outer_NN_dic = tensor_to_state_dict(self.outer_model, 
+                                          self.outer_param, 
+                                          self.device)
+      for name, param in self.outer_model.named_parameters():
+        param.data =outer_NN_dic[name]
+
+
   def forward(self, inner_model_inputs):
     """
     Forward pass of a neural network that approximates the function h* for Neur. Imp. Diff.
@@ -104,6 +113,7 @@ class InnerSolution(nn.Module):
     
     if self.training:
       self.inner_model.train()
+      self.update_model_params()
       return ArgMinOp.apply(self, self.outer_param, inner_model_inputs)
     else:
       with torch.no_grad():
@@ -111,15 +121,33 @@ class InnerSolution(nn.Module):
         val = self.inner_model(inner_model_inputs)
         return val  
   
-  def cross_derivative_dual_prod(self, outer_param, inner_model_inputs, inner_loss_inputs):
+  def cross_derivative_dual_prod(self, outer_param, 
+                                  inner_model_inputs, 
+                                  outer_model_inputs,
+                                  inner_loss_inputs):
+
     self.inner_model.eval()
     self.dual_model.eval()
     with torch.no_grad():
       inner_value = self.inner_model(inner_model_inputs)
       dual_value = self.dual_model(inner_model_inputs)
     inner_value.requires_grad = True
+    def f(outer_param,inner_value):
+      outer_NN_dic = tensor_to_state_dict(self.outer_model, 
+                                          outer_param, 
+                                          self.device)
+      outer_model_outputs = (torch.func.functional_call(self.outer_model, 
+                          parameter_and_buffer_dicts=outer_NN_dic, 
+                          args=outer_model_inputs,
+                          strict=True))
+      if inner_loss_inputs is not None:
+        return self.inner_objective.inner_loss(outer_model_outputs, 
+                                                inner_value, 
+                                                inner_loss_inputs)
+      else:
+        return self.inner_objective.inner_loss(outer_model_outputs, 
+                                                inner_value)        
 
-    f = lambda outer_param, inner_value: self.inner_objective.inner_loss(outer_param, inner_value, inner_loss_inputs)
     # Here v has to be a tuple of the same shape as the args of f, so we put a zero vector and a*(X) into a tuple.
     # Here args has to be a tuple with args of f, so we put outer_param and h*(X) into a tuple.
     loss = f(outer_param, inner_value)
@@ -156,12 +184,15 @@ class ArgMinOp(torch.autograd.Function):
     # In forward autograd is disabled by default but we use it in optimize(outer_param).
     inner_model = inner_solution.inner_solver.model
     inner_model.train()
+    inner_solution.outer_model.train()
     with torch.enable_grad():
       # Train the model to approximate h* at outer_param_k
-      inner_solution.inner_solver.run(outer_param)
+      inner_solution.inner_solver.run()
     # Remember the value h*(Z_outer)
     inner_model.eval()
     with torch.no_grad():
+        if hasattr(inner_solution.inner_solver, 'run_last_fit'):
+          inner_solution.inner_solver.run_last_fit()
         inner_value = inner_model(inner_model_inputs)
     # Context ctx allows to communicate from forward to backward
     ctx.inner_solution = inner_solution
@@ -177,7 +208,7 @@ class ArgMinOp(torch.autograd.Function):
     outer_param, inner_model_inputs, inner_value = ctx.saved_tensors
     # Get the inner Z and X
     # Gradient computation should be in train mode?
-    #inner_solution.outer_model.eval()
+    inner_solution.outer_model.eval()
     # Save the buffers here, reset at the start of every iteration of dual optimizer?
     #torch.save(inner_solution.outer_model.state_dict(), './outer_model_state')
     #inner_solution.outer_model.load_state_dict(torch.load('./outer_model_state'))
@@ -186,10 +217,13 @@ class ArgMinOp(torch.autograd.Function):
       # Here the model approximating a* needs to be trained on the same X_inner batches
       # as the h* model was trained on and on X_outer batches that h was evaluated on
       # in the outer loop where we optimize the outer objective g(outer_param, h).
-      inner_solution.dual_solver.run(outer_param, inner_model_inputs, outer_grad)
+      inner_solution.dual_solver.run(inner_model_inputs, outer_grad)
     with torch.no_grad():  
       data = inner_solution.inner_objective.get_data(use_previous_data=True)
-      inner_model_inputs, inner_loss_inputs =  inner_solution.inner_objective.data_projector(data)
+      inner_model_inputs, outer_model_inputs, inner_loss_inputs =  inner_solution.inner_objective.data_projector(data)
     with torch.enable_grad():
-      grad = inner_solution.cross_derivative_dual_prod(outer_param, inner_model_inputs, inner_loss_inputs)
+      grad = inner_solution.cross_derivative_dual_prod(outer_param, 
+                                                       inner_model_inputs, 
+                                                       outer_model_inputs, 
+                                                       inner_loss_inputs)
     return None, grad, None

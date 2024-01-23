@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from funcBO.utils import config_to_instance
+from funcBO.utils import config_to_instance, compute_batch_hessian
 
 
 class Solver:
@@ -16,7 +16,7 @@ class Solver:
   def init_logs(self):
     self.data_logs = []
 
-  def run(self,outer_param):
+  def run(self):
     raise NotImplementedError
 
   """def add_reg(self, loss, params):
@@ -46,6 +46,7 @@ class IterativeSolver(Solver):
     for i in range(self.num_iter):
       self.optimizer.zero_grad()
       loss = self.objective(self.model, *objective_args)
+      self.objective.outer_model.eval()
       self.data_logs.append({'inner_iter': i,
                               'loss': loss.item()})
       loss.backward()
@@ -69,24 +70,36 @@ class CompositeSolver(Solver):
     for i in range(self.num_iter):
       self.optimizer.zero_grad()
       data = self.objective.get_data()
-      inner_model_inputs, inner_loss_inputs = self.objective.data_projector(data)
+      inner_model_inputs, outer_model_inputs, inner_loss_inputs = self.objective.data_projector(data)
       # inner_model_outputs are the features phi(Z) (last 'model' corresponds to sequential object in the NN architecture)
       inner_model_outputs = self.model.model(inner_model_inputs)
-      loss, weight = self.reg_objective(*objective_args, inner_model_outputs, inner_loss_inputs)
+      outer_model_outputs = self.objective.outer_model(outer_model_inputs)
+      loss, weight = self.reg_objective(outer_model_outputs, inner_model_outputs)
+      self.objective.outer_model.eval()
       self.data_logs.append({'inner_iter': i,
                               'loss': loss.item()})
       print(loss.item())
       loss.backward()
       self.optimizer.step()
       # Here we do one more fit to get the closed-form weights of the last linear layer
-      if i == self.num_iter-1:
-        with torch.no_grad():
-          self.model.eval()
+#      if i == self.num_iter-1:
+        # Set last linear layer weights with their closed form values
+#        self.model.linear.weight.data = self.fit_weights(inner_model_inputs, 
+#                                                       inner_loss_inputs,
+#                                                        *objective_args)
 
-          inner_model_outputs = self.model.model(inner_model_inputs)
-          loss, weight = self.reg_objective(*objective_args, inner_model_outputs, inner_loss_inputs, backward_mode=True)
-      # Set last linear layer weights with their closed form values
-      self.model.linear.weight.data = weight.t().detach()
+
+  def run_last_fit(self,*objective_args):
+      # setting inner model to eval and outer model to train. 
+      data = self.objective.get_data(use_previous_data=True)
+      inner_model_inputs, outer_model_inputs, inner_loss_inputs = self.objective.data_projector(data)
+      inner_model_outputs = self.model.model(inner_model_inputs)
+      outer_model_outputs = self.objective.outer_model(outer_model_inputs)
+      loss, weight = self.reg_objective(outer_model_outputs, inner_model_outputs)
+      self.model.linear.weight.data=weight.t().detach()
+
+
+
 
 
 class ClosedFormSolver(Solver):
@@ -110,30 +123,30 @@ class ClosedFormSolver(Solver):
     W = torch.unflatten(W, dim=0, sizes=weight_shape)
     weights = list(self.model.parameters())
     weights[0].data = W.detach()
+  
 
-  def make_linear_system(self, outer_param,
+
+  def make_linear_system(self,
                                dual_model_inputs, 
                                outer_grad):
     data = self.objective.objective.get_data(use_previous_data=True)
-    inner_model_inputs, inner_loss_inputs =  self.objective.objective.data_projector(data)
+    inner_model_inputs, outer_model_inputs, inner_loss_inputs =  self.objective.objective.data_projector(data)
     inner_model = self.objective.inner_model
     inner_model.eval()
     with torch.no_grad():
       inner_model_output = inner_model(inner_model_inputs)
+      outer_model_outputs = self.objective.outer_model(outer_model_inputs)
       _,inner_features = self.model(inner_model_inputs,with_features=True)
       _,outer_features = self.model(dual_model_inputs,with_features=True)
       B_inner = inner_features.shape[0]
       B_outer = outer_features.shape[0]
-    output_shape = inner_model_output.shape[1:]
     inner_model_output = inner_model_output.flatten(start_dim=1)
 
-    def loss(inner_model_output, inner_loss_inputs):
-      if len(output_shape)>1:
-        inner_model_output = torch.unflatten(inner_model_output,dim=0,sizes=output_shape)
-      return self.objective.objective.inner_loss(outer_param, inner_model_output, inner_loss_inputs)
+    hessian = compute_batch_hessian(self.objective.objective.inner_loss,
+                                          outer_model_outputs, 
+                                          inner_model_output, 
+                                          inner_loss_inputs)
 
-    batch_hess = torch.func.vmap(torch.func.hessian(loss, argnums=0), in_dims=(0,0))
-    hessian = batch_hess(inner_model_output, inner_loss_inputs)
     hessian = (1/B_inner)*torch.einsum('bij, bc, bd->icjd', hessian, inner_features, inner_features)
     
     outer_grad = outer_grad.flatten(start_dim=1)
@@ -153,39 +166,37 @@ class IVClosedFormSolver(Solver):
     # Solving for the weights of the last linear layer
     hessian, B = self.make_linear_system(*objective_args)
     weight_shape = B.shape
+    #hessian = hessian.double()
     H_in = torch.inverse(hessian)
+    #H_in = H_in.float()
     W = -torch.einsum('dc, ic->id', H_in, B)
     weights = list(self.model.parameters())
     weights[0].data = W.detach()
 
   def make_linear_system(self,
-                                outer_param,
                                 dual_model_inputs, 
                                 outer_grad):
       data = self.objective.objective.get_data(use_previous_data=True)
-      inner_model_inputs, inner_loss_inputs =  self.objective.objective.data_projector(data)
+      inner_model_inputs, outer_model_inputs, inner_loss_inputs =  self.objective.objective.data_projector(data)
       inner_model = self.objective.inner_model
       inner_model.eval()
       with torch.no_grad():
         inner_model_output = inner_model(inner_model_inputs)
+        outer_model_outputs = self.objective.outer_model(outer_model_inputs)
         _,inner_features = self.model(inner_model_inputs,with_features=True)
         _,outer_features = self.model(dual_model_inputs,with_features=True)
         B_inner = inner_features.shape[0]
         B_outer = outer_features.shape[0]
       
-      output_shape = inner_model_output.shape[1:]
       hessian = (1/B_inner)*torch.einsum('bc, bd->cd',inner_features,inner_features)
       outer_grad = outer_grad.flatten(start_dim=1)
       B = (1/B_outer)*torch.einsum('bi, bc->ic',outer_grad,outer_features)
       
       if not self.diag_hessian_inner:
-        def loss(inner_model_output, inner_loss_inputs):
-          if len(output_shape)>1:
-            inner_model_output = torch.unflatten(inner_model_output,dim=0,sizes=output_shape)
-          return self.objective.objective.inner_loss(outer_param, inner_model_output, inner_loss_inputs)
-
-        batch_hess = torch.func.vmap(torch.func.hessian(loss, argnums=0), in_dims= (0,0))
-        hessian_inner = batch_hess(inner_model_output,inner_loss_inputs)
+        hessian_inner = compute_batch_hessian(self.objective.objective.inner_loss,
+                                          outer_model_outputs, 
+                                          inner_model_output, 
+                                          inner_loss_inputs)
         self.diag_hessian_inner = hessian_inner[0,0,0]
       hessian *= self.diag_hessian_inner
       hessian = self.add_ridge(hessian)

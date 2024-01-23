@@ -23,6 +23,7 @@ class Trainer:
         self.args = config
         self.device = assign_device(self.args.system.device)
         self.dtype = get_dtype(self.args.system.dtype)
+        torch.set_default_dtype(self.dtype)
         self.NNs_with_norms = NNs_with_norms
         self.build_trainer()
         self.iters = 0
@@ -80,6 +81,8 @@ class Trainer:
         # The outer neural network parametrized by the outer variable
         self.outer_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.outer_model, device))
 
+        self.inner_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.inner_model, device))
+
         # Optimizer that improves the outer variable
         self.outer_optimizer = torch.optim.Adam([self.outer_param], 
                                         lr=self.args.outer_optimizer.outer_lr, 
@@ -99,7 +102,7 @@ class Trainer:
 
         # Outer objective function
         def fo(g_z_out, Y):
-            self.outer_model.train(True)
+            #self.outer_model.train(True)
             res = fit_2n_stage(
                             g_z_out, 
                             Y,  
@@ -107,36 +110,39 @@ class Trainer:
             return res["stage2_loss"]
 
         # Inner objective function that depends only on the inner prediction
-        def fi(outer_param, instrumental_feature, X):#, backward_mode=False):
+        def fi(treatment_feature, instrumental_feature):#, backward_mode=False):
             #if backward_mode:
             #    self.outer_model.train(True)
             #else:
             #    self.outer_model.train(False)
-            outer_NN_dic = tensor_to_state_dict(self.outer_model, 
-                                                outer_param, 
-                                                device)
-            treatment_feature = (torch.func.functional_call(self.outer_model, 
-                                parameter_and_buffer_dicts=outer_NN_dic, 
-                                args=X,
-                                strict=True))
+            # outer_NN_dic = tensor_to_state_dict(self.outer_model, 
+            #                                     outer_param, 
+            #                                     device)
+            # treatment_feature = (torch.func.functional_call(self.outer_model, 
+            #                     parameter_and_buffer_dicts=outer_NN_dic, 
+            #                     args=X,
+            #                     strict=True))
+
+            #self.outer_model.train(False)
             # Fix reg. here, extract weight from the inner NN last linear layer
             loss = torch.norm((instrumental_feature - treatment_feature)) ** 2 + ridge_func(self.inner_model.linear.weight, self.Nlam_V)
             return loss
 
         # Inner objective function with regularization
-        def reg_objective(outer_param, instrumental_feature, X, backward_mode=False):
-            if backward_mode:
-                self.outer_model.train(True)
-            else:
-                self.outer_model.train(False)
-            outer_NN_dic = tensor_to_state_dict(self.outer_model,
-                                                    outer_param,
-                                                    device)
-            treatment_feature = (torch.func.functional_call(self.outer_model, 
-                                parameter_and_buffer_dicts=outer_NN_dic, 
-                                args=X, 
-                                strict=True))
+        def reg_objective(treatment_feature, instrumental_feature):
+            #if backward_mode:
+            #    self.outer_model.train(True)
+            #else:
+            #    self.outer_model.train(False)
+            # outer_NN_dic = tensor_to_state_dict(self.outer_model,
+            #                                         outer_param,
+            #                                         device)
+            # treatment_feature = (torch.func.functional_call(self.outer_model, 
+            #                     parameter_and_buffer_dicts=outer_NN_dic, 
+            #                     args=X, 
+            #                     strict=True))
             # Get the value of g(Z)
+            #self.outer_model.train(False)
             feature = augment_stage1_feature(instrumental_feature)
             weight = fit_linear(treatment_feature, feature, self.Nlam_V)
             pred = linear_reg_pred(feature, weight)
@@ -156,7 +162,7 @@ class Trainer:
             - tuple: A tuple containing the relevant components (z, x) extracted from the input data.
             """
             z,x,_ = data
-            return z,x
+            return z,x,None
 
         if self.args.inner_solver['name']=='funcBO.solvers.CompositeSolver':
             self.args.inner_solver['reg_objective'] = reg_objective
@@ -197,8 +203,8 @@ class Trainer:
                 metrics_dict['iter'] = self.iters
                 start = time.time()
                 # Move data to GPU
-                Z_outer = Z.to(self.device, dtype=torch.float)
-                Y_outer = Y.to(self.device, dtype=torch.float)
+                Z_outer = Z.to(self.device)
+                Y_outer = Y.to(self.device)
                 # Inner value corresponds to h*(Z)
                 forward_start = time.time()
                 # Get the value of h*(Z_outer)
@@ -221,12 +227,66 @@ class Trainer:
                 self.log(metrics_dict)
                 print(metrics_dict)
                 self.iters += 1
+                print(self.outer_param.grad)
                 done = (self.iters >= self.args.max_epochs)
                 if done:
                     break
         test_log = [{'inner_iter': 0,
                     'test loss': (self.evaluate(data_type="test")).item()}]
         self.log_metrics_list(test_log, 0, log_name='test_metrics')
+
+    # def train(self):
+
+
+    #     def eval_model(Z):
+
+    #         outer_NN_dic = tensor_to_state_dict(self.inner_model, 
+    #                                         self.inner_param, 
+    #                                             self.device)
+    #         out = (torch.func.functional_call(self.inner_model, 
+    #                             parameter_and_buffer_dicts=outer_NN_dic, 
+    #                             args=Z,
+    #                             strict=True))
+    #         return out
+
+
+    #     for Z, X, Y in self.outer_dataloader:
+    #         Z_out = Z
+
+    #     self.inner_model.eval()
+    #     params, buffers = torch.func.stack_module_state([self.inner_model])
+    #     print(buffers)
+    #     out = eval_model(Z)
+    #     params, buffers = torch.func.stack_module_state([self.inner_model])
+    #     print(buffers)
+    #     out = eval_model(Z)
+    #     params, buffers = torch.func.stack_module_state([self.inner_model])
+    #     print(buffers)
+    #     self.inner_model.train(True)
+    #     params, buffers = torch.func.stack_module_state([self.inner_model])
+    #     print(buffers)
+
+    #     out = eval_model(Z)
+
+    #     params, buffers = torch.func.stack_module_state([self.inner_model])
+    #     print(buffers)
+    #     self.inner_model.train(False)
+
+    #     params, buffers = torch.func.stack_module_state([self.inner_model])
+    #     print(buffers)
+
+    #     out = eval_model(Z)
+
+    #     params, buffers = torch.func.stack_module_state([self.inner_model])
+    #     print(buffers)
+
+    #     print(out)
+
+
+
+
+
+
 
     def evaluate(self, data_type="validation"):
         """
@@ -249,11 +309,11 @@ class Trainer:
         with torch.no_grad():
             if data_type == "test":
                 for Z, X, Y in self.outer_dataloader:
-                    Z_outer = Z.to(self.device, dtype=torch.float)
-                    Y_outer = Y.to(self.device, dtype=torch.float)
+                    Z_outer = Z.to(self.device)
+                    Y_outer = Y.to(self.device)
                 for Z, X, Y in self.inner_dataloader:
-                    Z_inner = Z.to(self.device, dtype=torch.float)
-                    X_inner = X.to(self.device, dtype=torch.float)
+                    Z_inner = Z.to(self.device)
+                    X_inner = X.to(self.device)
                 treatment_1st_feature = torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_inner)
                 instrumental_1st_feature = self.inner_model.model(Z_inner)
                 instrumental_2nd_feature = self.inner_model.model(Z_outer)

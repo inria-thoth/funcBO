@@ -178,8 +178,8 @@ def split_train_data(train_data, split_ratio, rand_seed=42, device='cpu', dtype=
 
     train_1st_data = TrainDataSet(*[get_data(data, idx_train_1st) for data in train_data])
     train_2nd_data = TrainDataSet(*[get_data(data, idx_train_2nd) for data in train_data])
-    train_1st_data_t = TrainDataSetTorch.from_numpy(train_1st_data, device=device)
-    train_2nd_data_t = TrainDataSetTorch.from_numpy(train_2nd_data, device=device)
+    train_1st_data_t = TrainDataSetTorch.from_numpy(train_1st_data, device=device, dtype=dtype)
+    train_2nd_data_t = TrainDataSetTorch.from_numpy(train_2nd_data, device=device, dtype=dtype)
 
     return train_1st_data_t, train_2nd_data_t
 
@@ -269,6 +269,17 @@ class OuterModelWithNorms(nn.Module):
                                     nn.Tanh()
                                 )
 
+        # self.model = nn.Sequential(nn.Linear(64 * 64, 1024),
+        #                             nn.ReLU(),
+        #                             nn.Linear(1024, 512),
+        #                             nn.ReLU(),
+        #                             nn.Linear(512, 128),
+        #                             nn.ReLU(),
+        #                             nn.Linear(128, 32),
+        #                             nn.Tanh()
+        #                         )
+
+
     def forward(self, x):
         res = self.model(x)
         return res
@@ -309,6 +320,18 @@ def build_net_for_dsprite_with_norms(seed, method='sequential'):
                                     nn.LayerNorm(32),#nn.BatchNorm1d(32),
                                     nn.ReLU()
                             )
+
+    # sequential = nn.Sequential(nn.Linear(3, 256),
+    #                                 nn.ReLU(),
+    #                                 nn.Linear(256, 128),
+    #                                 nn.ReLU(),
+    #                                 nn.Linear(128, 128),
+    #                                 nn.ReLU(),
+    #                                 nn.Linear(128, 32),
+    #                                 nn.ReLU()
+    #                         )
+
+
     set_seed(seed)
     response_net = OuterModelWithNorms()
     if method == 'sequential':

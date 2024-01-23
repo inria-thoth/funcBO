@@ -20,6 +20,7 @@ class Objective:
   """
   def __init__(self,inner_loss, 
                     inner_dataloader, data_projector,
+                    outer_model,
                     device, dtype):
       """
       inner_loss must be a function of the form g(theta, Z, Y) where 
@@ -29,6 +30,7 @@ class Objective:
       """
       self.inner_loss = inner_loss
       self.data_projector = data_projector
+      self.outer_model = outer_model
       self.device= device
       self.dtype = dtype
       self.inner_dataloader = RingGenerator(inner_dataloader, self.device, self.dtype)
@@ -42,20 +44,21 @@ class Objective:
         self.data = data
       return data    
 
-  def __call__(self,inner_model,outer_param):
+  def __call__(self,inner_model):
       data = self.get_data()
-      inner_model_inputs, inner_loss_inputs =  self.data_projector(data)
+      inner_model_inputs, outer_model_inputs, inner_loss_inputs =  self.data_projector(data)
       func_val = inner_model(inner_model_inputs)
+      outer_model_val = self.outer_model(outer_model_inputs)
       if inner_loss_inputs is not None:
-        loss = self.inner_loss(outer_param, func_val, inner_loss_inputs)
+        loss = self.inner_loss(outer_model_val,func_val)
       else:
-        loss = self.inner_loss(outer_param, func_val)
+        loss = self.inner_loss(outer_model_val, func_val)
 
       return loss
 
   def get_inner_model_input(self):
       data = next(self.inner_dataloader)
-      inner_model_inputs, inner_loss_inputs =  self.data_projector(data)
+      inner_model_inputs,outer_model_inputs, inner_loss_inputs =  self.data_projector(data)
       return inner_model_inputs
 
 
@@ -64,11 +67,11 @@ class DualObjective:
                 objective,
                 reg=0.):
     self.objective = objective
+    self.outer_model = objective.outer_model
     self.inner_model = inner_model
     self.reg = reg
 
   def __call__(self, dual_model, 
-                    outer_param, 
                     dual_model_inputs, 
                     outer_grad):
     """
@@ -76,13 +79,20 @@ class DualObjective:
     """
     # Specifying the inner objective as a function of h*(X)
     data = self.objective.get_data(use_previous_data=True)
-    inner_model_inputs, inner_loss_inputs =  self.objective.data_projector(data)
+    inner_model_inputs, outer_model_inputs, inner_loss_inputs =  self.objective.data_projector(data)
 
     self.inner_model.eval()
+    self.outer_model.eval()
     with torch.no_grad():
       inner_model_output = self.inner_model(inner_model_inputs)
+      outer_model_val    = self.outer_model(outer_model_inputs)
 
-    f = lambda inner_model_output: self.objective.inner_loss(outer_param, inner_model_output, inner_loss_inputs)
+    if inner_loss_inputs is not None:
+        f = lambda inner_model_output: self.objective.inner_loss(outer_model_val, inner_model_output, inner_loss_inputs)
+    else:
+        f = lambda inner_model_output: self.objective.inner_loss(outer_model_val, inner_model_output)
+
+    
     
     # Find the product of a*(X) with the hessian wrt h*(X)
     dual_val_inner = dual_model(inner_model_inputs)

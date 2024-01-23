@@ -20,6 +20,7 @@ class Trainer:
         self.args = config
         self.device = assign_device(self.args.system.device)
         self.dtype = get_dtype(self.args.system.dtype)
+        torch.set_default_dtype(self.dtype)
         self.NNs_with_norms = NNs_with_norms
         self.build_trainer()
 

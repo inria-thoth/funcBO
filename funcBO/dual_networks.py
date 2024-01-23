@@ -49,6 +49,7 @@ class LinearDualNetwork(DualNetwork):
                                 dtype=dtype)
 
   def forward(self, inputs,with_features=False):
+    self.model_with_hook.eval()
     with torch.no_grad():
       out, selected_out = self.model_with_hook(inputs)
       selected_out = selected_out.detach().flatten(start_dim=1)
@@ -65,6 +66,7 @@ class LinearDualNetwork(DualNetwork):
 
   def parameters(self):
       return (self.linear.parameters()) 
+
 
 
 class ModelWithHook(nn.Module):

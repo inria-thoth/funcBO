@@ -84,6 +84,30 @@ class RingGenerator:
     self.generator = None
 
 
+def compute_batch_hessian(inner_loss, outer_model_outputs, 
+                                inner_model_output, 
+                                inner_loss_inputs):
+  output_shape = inner_model_output.shape[1:]
+  if inner_loss_inputs is not None:
+    def loss(outer_model_outputs, inner_model_output, inner_loss_inputs):
+      if len(output_shape)>1:
+        inner_model_output = torch.unflatten(inner_model_output,dim=0,sizes=output_shape)
+      return inner_loss(outer_model_outputs, inner_model_output, inner_loss_inputs)
+  
+    batch_hess = torch.func.vmap(torch.func.hessian(loss, argnums=0), in_dims=(0,0,0))
+    hessian = batch_hess(outer_model_outputs,inner_model_output, inner_loss_inputs)
+  else:
+    def loss(outer_model_outputs, inner_model_output):
+      if len(output_shape)>1:
+        inner_model_output = torch.unflatten(inner_model_output,dim=0,sizes=output_shape)
+      return inner_loss(outer_model_outputs, inner_model_output)
+
+    batch_hess = torch.func.vmap(torch.func.hessian(loss, argnums=0), in_dims=(0,0))
+    hessian = batch_hess(outer_model_outputs,inner_model_output)
+  return hessian
+
+
+
 def plot_2D_functions(figname, f1, f2, f3, points=None, plot_x_lim=[-5,5], plot_y_lim=[-5,5], plot_nb_contours=10, titles=["True function","Classical Imp. Diff.","Neural Imp. Diff."]):
   """
   A function to plot three continuos 2D functions side by side on the same domain.

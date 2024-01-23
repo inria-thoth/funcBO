@@ -55,7 +55,9 @@ def fit_linear(target, feature, reg):
     # U = torch.cholesky(A)
     # A_inv = torch.cholesky_inverse(U)
     #TODO use cholesky version in the latest pytorch
+    #A = A.double()
     A_inv = torch.inverse(A)
+    #A_inv = A_inv.float()
     if target.dim() == 2:
         b = torch.matmul(feature.t(), target)
         weight = torch.matmul(A_inv, b)
@@ -150,7 +152,7 @@ class DFIVTrainer:
         """
         Perform first stage of DFIV.
         """
-        self.treatment_net.train(False)
+        self.treatment_net.train(True)
         # Train only the feature map g(Z)
         self.instrumental_net.train(True)
         # Get the value of f(X)
@@ -174,7 +176,8 @@ class DFIVTrainer:
         Perform second stage of DFIV.
         """
         # Train only the feature map f(X)
-        self.treatment_net.train(True)
+        #self.treatment_net.train(True)
+        self.treatment_net.eval()
         self.instrumental_net.eval()
         # Get the value of g(Z)_stage1
         instrumental_1st_feature = self.instrumental_net(stage1_dataset.instrumental).detach()
