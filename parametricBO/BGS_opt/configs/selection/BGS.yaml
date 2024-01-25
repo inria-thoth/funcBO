@@ -1,0 +1,32 @@
+# @package selection
+
+name: 'BGS'
+warm_start_iter : 1
+unrolled_iter: 0
+correction: True
+add_correction: True
+compute_latest_correction: True
+dual_var_warm_start: True
+
+optimizer:
+  name: 'torchopt.sgd'
+  momentum: 0.9
+  lr: 0.1
+  # name: 'TorchOpt.adam'
+  # b1 : 0.9
+  # b2: 0.999
+  # eps: 0.00000001
+  # eps_root: 0.00000001
+scheduler:
+  name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
+  T_max: ${training.total_epoch}
+  use_scheduler: True
+linear_solver:
+  name: 'core.linear_solvers.Normal_GD'
+  lr: 0.0001
+  n_iter: 1
+linear_op: 
+  name: 'core.selection.HessianOp'
+  stochastic: True
+  use_new_input: True
+  compute_new_grad: True

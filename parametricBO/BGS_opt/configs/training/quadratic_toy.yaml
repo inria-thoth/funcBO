@@ -1,0 +1,58 @@
+# @package training
+
+
+trainer_name: 'examples.toy.trainer.Trainer'
+total_epoch: 200
+resume: False
+
+
+metrics:
+  disp_freq: 10
+  max_upper_iter: 1
+  max_lower_iter : 1
+  epoch_eval: True
+  log_artefacts_freq: 200
+  log_artifacts: True
+  log_lower_cond: False
+  freq_lower_cond: 5000
+  eval_test: True
+  name: 'value'
+
+
+loader:
+  b_size : 1
+  eval_b_size: 1
+
+upper:
+  objective:
+    name: 'examples.toy.models.QuadyLinx'
+    cond : 10.
+  model:
+    name: 'examples.toy.models.Identity'
+    dim : 2000
+    path: ''
+  optimizer:
+    name: 'torch.optim.SGD'
+    lr : 0.0003
+    weight_decay: 0.
+  scheduler:
+    name: 'torch.optim.lr_scheduler.ReduceLROnPlateau'
+    patience: 1
+    use_scheduler: False
+  clip: False
+  max_norm: 1.
+ 
+
+lower:
+  objective:
+    name: 'examples.toy.models.QuadyLinx'
+    cond : 10.
+  model:
+    name: 'examples.toy.models.Identity'
+    dim : 1000
+
+
+
+
+
+

@@ -1,0 +1,16 @@
+# @package cluster
+user: ${env:USER}
+#workspace: ${env:WORK}
+#tempdir: ${env:JOBSCRATCH}
+engine: "OAR"
+shell:
+  bin_path: "/bin/bash"
+  config_path: "~/.bashrc"
+directive: "#OAR"
+cleanup: "source gpu_setVisibleDevices.sh"
+cmd: "oarsub -S"
+launchers: ${launcher.name}
+#launchers: "default"
+#node: ${env:ACCESS_NODE}
+conda_env: ${env:CONDA_DEFAULT_ENV}
+name: "thoth"

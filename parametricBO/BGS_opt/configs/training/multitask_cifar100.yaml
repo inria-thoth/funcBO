@@ -1,0 +1,68 @@
+# @package training
+
+
+trainer_name: 'examples.multitask.trainer.Trainer'
+total_epoch: 200
+resume: False
+
+
+metrics:
+  disp_freq: 10
+  max_upper_iter: 1
+  max_lower_iter : 1
+  epoch_eval: True
+  log_artefacts_freq: 200
+  log_artifacts: True
+  log_lower_cond: False
+  freq_lower_cond: 5000
+  eval_test: True
+  name: 'multivalue'
+
+
+loader:
+  name : 'datasets.CIFAR100MTL'
+  b_size : 32
+  eval_b_size: 32
+  num_tasks: 20
+  subset_id: 0
+  data_path : 'data/datasets'
+
+upper:
+  objective:
+    name: 'examples.multitask.models.MutiTaskLoss'
+    weighted: False
+    apply_reg: False
+    num_tasks : ${training.loader.num_tasks} 
+  model:
+    name: 'examples.multitask.models.Identity'
+    dim: ${training.loader.num_tasks}
+    init: 0.1
+    path: ''
+  optimizer:
+    name: 'torch.optim.Adam'
+    lr : 0.0003
+    weight_decay: 0.
+  scheduler:
+    name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
+    T_max: ${training.total_epoch}
+    use_scheduler: False
+  clip: False
+  max_norm: 1.
+ 
+
+lower:
+  objective:
+    name: 'examples.multitask.models.MutiTaskLoss'
+    weighted: True
+    apply_reg: True
+    reg: 0.0005
+    num_tasks: ${training.loader.num_tasks}
+  model:
+    name: 'examples.multitask.models.networks.VectMTLVGG16'
+    num_tasks : ${training.loader.num_tasks}
+
+
+
+
+
+

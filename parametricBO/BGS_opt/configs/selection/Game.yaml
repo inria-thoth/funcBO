@@ -1,0 +1,22 @@
+# @package selection
+
+name: 'Game'
+warm_start_iter : 1
+unrolled_iter: 0
+correction: False
+compute_latest_correction: False
+dual_var_warm_start: False
+
+optimizer:
+  name: 'TorchOpt.sgd'
+  momentum: 0.9
+  lr: 0.1
+  # name: 'TorchOpt.adam'
+  # b1 : 0.9
+  # b2: 0.999
+  # eps: 0.00000001
+  # eps_root: 0.00000001
+scheduler:
+  name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
+  T_max: ${training.total_epoch}
+  use_scheduler: True
