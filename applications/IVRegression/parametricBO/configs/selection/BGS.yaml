@@ -10,8 +10,8 @@ dual_var_warm_start: True
 optimizer:
   name: 'torchopt.adam'
   #momentum: 0.0
-  lr: 0.001
-  weight_decay: 0.0
+  lr: 0.001 # (grid search)
+  weight_decay: 0.0 # no need for this (use lam_V)
   # name: 'TorchOpt.adam'
   betas : ${as_tuple:0.9,0.999}
   eps: 0.00000001
@@ -21,9 +21,9 @@ scheduler:
   #T_max: ${training.total_epoch}
   use_scheduler: False
 linear_solver:
-  name: 'core.linear_solvers.GD'
-  lr: 0.001
-  n_iter: 2
+  name: 'core.linear_solvers.GD' #'core.linear_solvers.Normal_GD' # (grid search)
+  lr: 0.001 # (grid search)
+  n_iter: 20
 linear_op: 
   name: 'core.selection.HessianOp'
   stochastic: False

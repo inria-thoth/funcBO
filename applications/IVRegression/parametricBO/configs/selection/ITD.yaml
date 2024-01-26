@@ -1,8 +1,8 @@
 # @package selection
 
-name: 'BGS'
+name: 'ITD'
 warm_start_iter : 19
-unrolled_iter: 1
+unrolled_iter: 1 # (grid search)
 correction: False
 compute_latest_correction: True
 dual_var_warm_start: True
@@ -10,8 +10,8 @@ dual_var_warm_start: True
 optimizer:
   name: 'torchopt.adam'
   #momentum: 0.0
-  lr: 0.001
-  weight_decay: 0.0
+  lr: 0.001 # (grid search)
+  weight_decay: 0. # no need for this (use lam_V)
   # name: 'TorchOpt.adam'
   betas : ${as_tuple:0.9,0.999}
   eps: 0.00000001
