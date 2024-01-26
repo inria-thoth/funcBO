@@ -1,0 +1,318 @@
+# Package ######################################################################
+
+[build-system]
+# Sync with project.dependencies
+requires = ["setuptools", "torch >= 1.13", "numpy", "pybind11 >= 2.10.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torchopt"
+description = "An efficient library for differentiable optimization for PyTorch."
+readme = "README.md"
+# Change this if wheels for `torch` is available
+# Search "requires-python" and update all corresponding items
+requires-python = ">= 3.8"
+authors = [
+    { name = "TorchOpt Contributors" },
+    { name = "Jie Ren", email = "jieren9806@gmail.com" },
+    { name = "Xidong Feng", email = "xidong.feng.20@ucl.ac.uk" },
+    { name = "Bo Liu", email = "benjaminliu.eecs@gmail.com" },
+    { name = "Xuehai Pan", email = "XuehaiPan@pku.edu.cn" },
+]
+license = { text = "Apache License, Version 2.0" }
+keywords = [
+    "PyTorch",
+    "functorch",
+    "JAX",
+    "Meta-Learning",
+    "Optimizer",
+    "Differentiable Optimizer",
+    "Functional Programming",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    # Sync with requires-python
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Environment :: GPU",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    # See also build-system.requires and project.requires-python
+    "torch >= 1.13",
+    "optree >= 0.4.1",
+    "numpy",
+    "graphviz",
+    "typing-extensions >= 4.0.0",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/metaopt/torchopt"
+Repository = "https://github.com/metaopt/torchopt"
+Documentation = "https://torchopt.readthedocs.io"
+"Bug Report" = "https://github.com/metaopt/torchopt/issues"
+
+[project.optional-dependencies]
+lint = [
+    "isort",
+    "black[jupyter] >= 22.6.0",
+    "pylint[spelling] >= 2.15.0",
+    "mypy >= 0.990",
+    "flake8",
+    "flake8-bugbear",
+    "flake8-comprehensions",
+    "flake8-docstrings",
+    "flake8-pyi",
+    "flake8-simplify",
+    "ruff",
+    "doc8",
+    "pydocstyle[toml]",
+    "pyenchant",
+    "cpplint",
+    "pre-commit",
+]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "jax[cpu] >= 0.3; platform_system != 'Windows'",
+    "jaxopt; platform_system != 'Windows'",
+    "optax; platform_system != 'Windows'",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["torchopt", "torchopt.*"]
+
+[tool.setuptools.package-data]
+torchopt = ['*.so', '*.pyd']
+
+# Wheel builder ################################################################
+# Reference: https://cibuildwheel.readthedocs.io
+[tool.cibuildwheel]
+archs = ["auto64"]
+build = "*manylinux*"
+skip = "pp* *musllinux*"
+build-frontend = "pip"
+build-verbosity = 3
+environment.USE_FP16 = "ON"
+environment.CUDACXX = "/usr/local/cuda/bin/nvcc"
+environment.TORCH_CUDA_ARCH_LIST = "Common"
+environment.DEFAULT_CUDA_VERSION = "11.7"
+environment.DEFAULT_TEST_TORCH_SPECS = "cpu cu116"
+environment-pass = ["CUDA_VERSION", "TEST_TORCH_SPECS"]
+container-engine = "docker"
+test-extras = ["test"]
+
+[tool.cibuildwheel.linux]
+before-all = """
+    CUDA_VERSION="${CUDA_VERSION:-"${DEFAULT_CUDA_VERSION}"}"
+    if [[ "${CUDA_VERSION}" == "None" || "${CUDA_VERSION}" == "none" ]]; then
+        sed -i -E "s/__version__\\s*=\\s*.*$/\\0 + '+cpu'/" torchopt/version.py
+    else
+        CUDA_VERSION="$(echo "${CUDA_VERSION}" | cut -d"." -f-2)"
+        CUDA_PKG_SUFFIX="$(echo "${CUDA_VERSION}" | tr "." "-")"
+        echo "CUDA_VERSION=${CUDA_VERSION}"
+        yum-config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-rhel7.repo
+        yum clean all
+        yum install -y nvidia-driver-latest-libs "cuda-minimal-build-${CUDA_PKG_SUFFIX}"
+    fi
+    echo "cat torchopt/version.py"; cat torchopt/version.py
+    touch .first-python
+"""
+repair-wheel-command = """
+    python -m pip install -r requirements.txt
+    SITE_PACKAGES="$(python -c 'print(__import__("sysconfig").get_path("purelib"))')"
+    TORCH_LIB_PATH="${SITE_PACKAGES}/torch/lib"
+    (
+        export LD_LIBRARY_PATH="${TORCH_LIB_PATH}:/usr/local/cuda/lib64:/usr/local/cuda/targets/x86_64-linux/lib/stubs${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+        echo "ls ${TORCH_LIB_PATH}"; ls -lh "${TORCH_LIB_PATH}"
+        python -m pip install --force-reinstall git+https://github.com/XuehaiPan/auditwheel.git@torchopt
+        python -m auditwheel lddtree "{wheel}"
+        python -m auditwheel repair --no-copy-site-libs --wheel-dir="{dest_dir}" "{wheel}"
+    )
+"""
+test-command = """
+    SITE_PACKAGES="$(python -c 'print(__import__("sysconfig").get_path("purelib"))')"
+    TORCH_LIB_PATH="${SITE_PACKAGES}/torch/lib"
+    echo "LD_LIBRARY_PATH='${LD_LIBRARY_PATH}'"
+    echo "ls ${TORCH_LIB_PATH}"; ls -lh "${TORCH_LIB_PATH}"
+    find "${SITE_PACKAGES}/torchopt" -name "*.so" -print0 |
+        xargs -0 -I '{}' bash -c "echo 'ldd {}'; ldd '{}'; echo 'patchelf --print-rpath {}'; patchelf --print-rpath '{}'"
+    make -C "{project}" test || exit 1
+    TORCH_VERSION="$(python -c 'print(__import__("torch").__version__.partition("+")[0])')"
+    if [[ -f .first-python ]]; then
+        TEST_TORCH_SPECS="${TEST_TORCH_SPECS:-"${DEFAULT_TEST_TORCH_SPECS}"}"
+        for spec in ${TEST_TORCH_SPECS}; do
+            python -m pip uninstall -y torch
+            export PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/${spec}"
+            echo "PIP_EXTRA_INDEX_URL='${PIP_EXTRA_INDEX_URL}'"
+            python -m pip install "torch==${TORCH_VERSION}"
+            echo "ls ${TORCH_LIB_PATH}"; ls -lh "${TORCH_LIB_PATH}"
+            find "${SITE_PACKAGES}/torchopt" -name "*.so" -print0 |
+                xargs -0 -I '{}' bash -c "echo 'ldd {}'; ldd '{}'; echo 'patchelf --print-rpath {}'; patchelf --print-rpath '{}'"
+            make -C "{project}" test || exit 1
+        done
+        rm -f .first-python
+    fi
+    rm -rf ~/.pip/cache ~/.cache/pip
+"""
+
+# Linter tools #################################################################
+
+[tool.black]
+safe = true
+line-length = 100
+skip-string-normalization = true
+# Sync with requires-python
+target-version = ["py38", "py39", "py310", "py311"]
+
+[tool.isort]
+atomic = true
+profile = "black"
+src_paths = ["torchopt", "examples", "tests"]
+extra_standard_library = ["typing_extensions"]
+indent = 4
+line_length = 100
+lines_after_imports = 2
+multi_line_output = 3
+
+[tool.mypy]
+# Sync with requires-python
+python_version = 3.8
+pretty = true
+show_error_codes = true
+show_error_context = true
+show_traceback = true
+allow_redefinition = true
+check_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
+ignore_missing_imports = true
+no_implicit_optional = true
+strict_equality = true
+strict_optional = true
+warn_no_return = true
+warn_redundant_casts = true
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+[tool.pydocstyle]
+convention = "google"
+
+[tool.doc8]
+max-line-length = 500
+
+[tool.codespell]
+ignore-words = "docs/source/spelling_wordlist.txt"
+
+[tool.ruff]
+# Sync with requires-python
+target-version = "py38"
+line-length = 100
+show-source = true
+src = ["torchopt", "tests"]
+extend-exclude = ["examples"]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "UP",      # pyupgrade
+    "ANN",     # flake8-annotations
+    "S",       # flake8-bandit
+    "BLE",     # flake8-blind-except
+    "B",       # flake8-bugbear
+    "COM",     # flake8-commas
+    "C4",      # flake8-comprehensions
+    "EXE",     # flake8-executable
+    "ISC",     # flake8-implicit-str-concat
+    "PIE",     # flake8-pie
+    "PYI",     # flake8-pyi
+    "Q",       # flake8-quotes
+    "RSE",     # flake8-raise
+    "RET",     # flake8-return
+    "SIM",     # flake8-simplify
+    "TID",     # flake8-tidy-imports
+    "RUF",     # ruff
+]
+ignore = [
+    # E501: line too long
+    # W505: doc line too long
+    # too long docstring due to long example blocks
+    "E501",
+    "W505",
+    # ANN101: missing type annotation for `self` in method
+    # ANN102: missing type annotation for `cls` in classmethod
+    "ANN101",
+    "ANN102",
+    # ANN401: dynamically typed expressions (typing.Any) are disallowed
+    "ANN401",
+    # S101: use of `assert` detected
+    # internal use and may never raise at runtime
+    "S101",
+    # PLR0402: use from {module} import {name} in lieu of alias
+    # use alias for import convention (e.g., `import torch.nn as nn`)
+    "PLR0402",
+]
+typing-modules = ["torchopt.typing"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = [
+    "F401",  # unused-import
+]
+"torchopt/pytree.py" = [
+    "F401",  # unused-import
+    "F403",  # import-star
+    "F405",  # import-star-usage
+]
+"setup.py" = [
+    "ANN",   # flake8-annotations
+]
+"tests/**/*.py" = [
+    "ANN",   # flake8-annotations
+    "S",     # flake8-bandit
+    "BLE",   # flake8-blind-except
+]
+"tests/test_import.py" = [
+    "B018",  # useless-expression
+    "F401",  # unused-import
+    "F811",  # redefined-while-unused
+]
+
+[tool.ruff.flake8-annotations]
+allow-star-arg-any = true
+
+[tool.ruff.flake8-quotes]
+docstring-quotes = "double"
+multiline-quotes = "double"
+inline-quotes = "single"
+
+[tool.ruff.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.pylint]
+allow-magic-value-types = ["int", "str", "float"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error",
+    'ignore:Explicitly requested dtype float64 requested in .* is not available, and will be truncated to dtype float32\.:UserWarning',
+    'ignore:jax\.numpy\.DeviceArray is deprecated\. Use jax\.Array\.:DeprecationWarning',
+    'ignore:.*functorch.*deprecate.*:UserWarning',
+    'ignore:.*Apple Paravirtual device.*:UserWarning',
+]

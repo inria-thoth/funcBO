@@ -1,0 +1,18 @@
+defaults:
+  - system : default
+  - cluster : OAR
+  - launcher: default
+  - logs: default
+  - training: multitask_cifar100
+  - selection: BGS
+hydra:
+  output_subdir: null
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  hydra_logging:
+    disable_existing_loggers: True
+  job_logging:
+    disable_existing_loggers: True

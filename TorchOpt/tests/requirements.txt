@@ -1,0 +1,28 @@
+--extra-index-url https://download.pytorch.org/whl/cu117
+torch >= 1.13
+
+--requirement ../requirements.txt
+
+jax[cpu] >= 0.3; platform_system != 'Windows'
+jaxopt; platform_system != 'Windows'
+optax; platform_system != 'Windows'
+
+pytest
+pytest-cov
+pytest-xdist
+isort >= 5.11.0
+black[jupyter] >= 22.6.0
+pylint[spelling] >= 2.15.0
+mypy >= 0.990
+flake8
+flake8-bugbear
+flake8-comprehensions
+flake8-docstrings
+flake8-pyi
+flake8-simplify
+ruff
+doc8
+pydocstyle[toml]
+pyenchant
+cpplint
+pre-commit

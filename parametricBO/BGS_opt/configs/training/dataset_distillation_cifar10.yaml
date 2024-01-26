@@ -1,0 +1,69 @@
+# @package training
+
+
+trainer_name: 'examples.datasetdistillation.trainer.Trainer'
+total_epoch: 200
+resume: False
+
+
+metrics:
+  disp_freq: 10
+  max_upper_iter: 1
+  max_lower_iter : 1
+  epoch_eval: True
+  log_artefacts_freq: 200
+  log_artifacts: True
+  log_lower_cond: False
+  freq_lower_cond: 5000
+  eval_test: True
+  name: 'value'
+
+
+loader:
+  name : 'CIFAR10'
+  b_size : 1000
+  eval_b_size: 1000
+  data_path : 'data/datasets'
+  n_classes: 10
+  n_features: 3072 # 784
+
+upper:
+  objective:
+    name: 'examples.datasetdistillation.models.LogisticDistill'
+    is_lower: false
+    reg: 0.
+  model:
+    name: 'examples.datasetdistillation.models.ModelDataset'
+    factor: 10
+    path: ''
+  optimizer:
+    name: 'torch.optim.Adam'
+    lr : 0.0003
+    weight_decay: 0.
+  scheduler:
+    name: 'torch.optim.lr_scheduler.ReduceLROnPlateau'
+    patience: 1
+    use_scheduler: False
+  clip: False
+  max_norm: 1.
+ 
+
+lower:
+  objective:
+    name: 'examples.datasetdistillation.models.LogisticDistill'
+    reg: 0.
+    is_lower: true
+  model:
+    name: 'torchvision.models.resnet18'
+    num_classes : ${training.loader.n_classes}
+    # name: 'examples.datasetdistillation.models.MLP'
+    # in_channel: 3072
+    # out_channel: ${training.loader.n_classes}
+    # name: 'examples.datasetdistillation.models.Linear'
+    # n_features : ${training.loader.n_features}
+    # n_classes : ${training.loader.n_classes}
+
+
+
+
+

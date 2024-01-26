@@ -1,0 +1,11 @@
+# @package launcher
+name: "default"
+filename: "${launcher.name}.sh"
+hours: 12
+gpumodel: null
+gpumem: null
+besteffort: false
+idempotent: false
+cmd: "run.py"
+nodes: 1
+cpus: 1

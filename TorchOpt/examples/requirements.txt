@@ -1,0 +1,14 @@
+--extra-index-url https://download.pytorch.org/whl/cu117
+torch >= 1.13
+torchvision
+
+--requirement ../requirements.txt
+
+gym >= 0.20.0, < 0.24.0a0
+matplotlib
+pandas
+seaborn
+torchviz
+torchrl
+pillow
+setproctitle
