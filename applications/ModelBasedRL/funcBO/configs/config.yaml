@@ -1,0 +1,33 @@
+env_name:  'CartPole-v1'
+seed: 0
+num_train_steps: 200000
+hidden_dim: 32
+model_hidden_dim: 32
+batch_size: 256
+init_steps: 1000
+eval_frequency: 1000
+log_frequency: 100
+ckpt_frequency: 1000
+num_Q_steps: 1
+num_T_steps: 1
+num_dual_Q_steps: 1
+num_ensemble_vep: 5
+eps: 0.1
+discount: 0.99
+lr: 0.001
+inner_lr: 0.0003 # 0.001, 0.003
+dual_lr: 0.0003
+alpha: 0.01
+tau: 0.01 # 0.005
+save_buf: False
+save_agent: False
+hard: False
+no_learn_reward: False
+prob_model: False
+no_warm: False
+warm_opt: False
+no_double: False
+with_inv_jac: False
+
+agent_type: 'omd'
+
