@@ -1,6 +1,6 @@
-seed: 42
+seed: 1
 batch_size: 2500
-max_epochs: 2
+max_epochs: 10
 eval_every_n: 1
 lam_u: 0.1
 lam_V: 0.2
@@ -30,6 +30,3 @@ dual_model:
     name: 'funcBO.dual_networks.LinearDualNetwork'
     input_dim: 32
     output_dim: 32
-
-
-

@@ -183,8 +183,8 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", ver
 
 # Setting colors, labels and paths to data
 root = "/home/ipetruli/funcBO/applications/data/outputs/"
-methods = ["dfiv5000", "funcBO5000", "funcBO_dual_iterative"]#, "dfiv_original", "dfiv_batchnorm", "dfiv_layernorm"]
-labels = ["DFIV", "funcBO", "funcBO_GD_a*"]#, "DFIV", "bDFIV", "lDFIV"]
+methods = ["dfiv5000", "funcBO5000", "funcBO_inner_dual_iterative"]#, "dfiv_original", "dfiv_batchnorm", "dfiv_layernorm"]
+labels = ["DFIV", "funcBO", "funcBO_allLearned"]#, "DFIV", "bDFIV", "lDFIV"]
 custom_colors = ['#00bf7d', '#e76bf3', '#f8766d']#, '#00b0f6', '#d2c5b6']#, '#c0e6da']
 json_paths = [root + item for item in methods]
 
@@ -192,12 +192,12 @@ json_paths = [root + item for item in methods]
 plot_line_loss_from_json(json_paths, "outer_loss", metrics_file="metrics", y_axis_name="Outer Loss", labels=labels, colors=custom_colors)
 #plot_line_loss_from_json(json_paths, "val_loss", metrics_file="metrics")
 plot_line_loss_from_json(json_paths, "loss", metrics_file="inner_metrics", y_axis_name="Inner Loss", labels=labels, colors=custom_colors)
-#plot_line_loss_from_json(json_paths, "loss", metrics_file="dual_metrics")
+plot_line_loss_from_json(json_paths, "loss", vertical_axis_scale="linear", metrics_file="dual_metrics", y_axis_name="Dual Loss", labels=labels, colors=custom_colors)
 
 # Setting colors, labels and paths to data
 root = "/home/ipetruli/funcBO/applications/data/outputs/"
-methods = ["dfiv5000", "funcBO5000", "funcBO_dual_iterative"]#, "dfiv10000", "funcBO10000", "dfiv_original", "dfiv_batchnorm", "dfiv_layernorm"]
-labels = ["DFIV", "funcBO", "funcBO_GD_a*"]#, "DFIV", "bDFIV", "lDFIV
+methods = ["dfiv5000", "funcBO5000", "funcBO_inner_dual_iterative"]#, "dfiv10000", "funcBO10000", "dfiv_original", "dfiv_batchnorm", "dfiv_layernorm"]
+labels = ["DFIV", "funcBO", "funcBO_allLearned"]#, "DFIV", "bDFIV", "lDFIV
 custom_colors = ['#00bf7d', '#e76bf3', '#f8766d']#, '#00b0f6']
 json_paths = [root + item for item in methods]
 

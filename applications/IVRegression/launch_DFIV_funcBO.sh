@@ -7,7 +7,7 @@ parent_work_dir="../../data/.workdir"
 
 parent_log_dir="../../data/outputs/dfiv"
 HYDRA_FULL_ERROR=1 OC_CAUSE=1 python applications/IVRegression/DFIV/main.py \
-                seed=1,2,3,4,5,6,7,8,9,10\
+                seed=seed=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20\
                 +mlxp.use_scheduler=True\
                 +mlxp.use_version_manager=False\
                 +mlxp.interactive_mode=False\
@@ -18,7 +18,7 @@ HYDRA_FULL_ERROR=1 OC_CAUSE=1 python applications/IVRegression/DFIV/main.py \
 # Run the main script Functional Bilevel Optimization with linear closed form gradient
 parent_log_dir="../../data/outputs/funcBO"
 HYDRA_FULL_ERROR=1 OC_CAUSE=1 python applications/IVRegression/funcBO/main.py \
-                seed=1,2,3,4,5,6,7,8,9,10\
+                seed=seed=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20\
                 +mlxp.use_scheduler=True\
                 +mlxp.use_version_manager=False\
                 +mlxp.interactive_mode=False\

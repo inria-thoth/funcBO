@@ -1,6 +1,6 @@
 import torch
-from applications.IVRegression.dsprites_data.trainer import *
-from applications.IVRegression.dsprites_data.generator import *
+from applications.IVRegression.dataset_networks_dsprites.twoSLS import *
+from applications.IVRegression.dataset_networks_dsprites.generator import *
 import time
 from funcBO.utils import assign_device, get_dtype, tensor_to_state_dict, state_dict_to_tensor
 from torch.utils.data import DataLoader
@@ -93,10 +93,7 @@ class Trainer:
 
 
         # Neural networks for dsprites data
-        #if self.NNs_with_norms:
-        self.inner_model, self.outer_model = build_net_for_dsprite_with_norms(self.args.seed, method='sequential+linear')
-        #else:
-        #    self.inner_model, self.outer_model = build_net_for_dsprite(self.args.seed, method='sequential+linear')
+        self.inner_model, self.outer_model = build_net_for_dsprite(self.args.seed, method='sequential+linear')
         self.linear_outer = nn.Linear(self.args.linear.in_dim, self.args.linear.out_dim, bias =True)
         self.inner_model.to(device)
         self.outer_model.to(device)
@@ -236,9 +233,6 @@ class Trainer:
                 inner_val = self.functional_inner_model(opt_lower_var,Z_outer)
 
                 loss = self.outer_loss(inner_val, Y_outer)
-                
-
-
 
                 # Backpropagation
                 self.outer_optimizer.zero_grad()

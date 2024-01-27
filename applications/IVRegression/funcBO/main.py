@@ -15,7 +15,7 @@ def train(ctx: mlxp.Context) -> None:
         print("Failed to load the checkpoint, starting from scratch")
         # Create a new instance of the Trainer class with the configuration and logger from the MLXP context
         # Check if the run logs (in ctx.logger) already exist, if so, delete them here (only .json files)
-        trainer = Trainer(ctx.config, ctx.logger, NNs_with_norms=True)
+        trainer = Trainer(ctx.config, ctx.logger)
 
     # Call the train method of the Trainer instance
     trainer.train()
