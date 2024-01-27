@@ -1,5 +1,4 @@
 import mlxp
-from applications.ModelBasedRL.funcBO.trainer import Trainer
 
 @mlxp.launch(config_path='./configs')
 
@@ -13,6 +12,7 @@ def train(ctx: mlxp.Context) -> None:
         print("Failed to load the checkpoint, starting from scratch")
         # Create a new instance of the Trainer class with the configuration and logger from the MLXP context
         # Check if the run logs (in ctx.logger) already exist, if so, delete them here (only .json files)
+        from applications.ModelBasedRL.funcBO.trainer import Trainer
         trainer = Trainer(ctx.config, ctx.logger)
 
     # Call the train method of the Trainer instance

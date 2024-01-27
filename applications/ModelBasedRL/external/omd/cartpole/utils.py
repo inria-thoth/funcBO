@@ -124,7 +124,7 @@ def argmin_bwd_exact(inner_loss, inner_model, solvers, res, g):
 
 
 #inner_solution.defvjp(root_solve_fwd, root_solve_bwd)
-inner_solution.defvjp(argmin_fwd, argmin_bwd)
+inner_solution.defvjp(argmin_fwd, argmin_bwd_exact)
 
 
 
