@@ -12,7 +12,7 @@ from parametricBO.BGS_opt.core.selection import make_selection
 
 
 
-
+ 
 class Trainer:
     """
     Solves an instrumental regression problem using the bilevel functional method.
