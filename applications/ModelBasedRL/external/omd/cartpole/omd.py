@@ -225,7 +225,7 @@ class Agent:
       opt_state_Q = self.Q.opt.init(params_Q)
     
     for i in range(self.args.num_Q_steps):
-      updout = self.update_step(
+      updout = self.update_step_inner(
         params_Q, target_params_Q, opt_state_Q, None, replay_model)
       params_Q, opt_state_Q = updout.params_Q, updout.opt_state_Q
       target_params_Q = soft_update_params(self.args.tau, params_Q, target_params_Q)
@@ -237,7 +237,7 @@ class Agent:
 
   @partial(jax.jit, static_argnums=(0,))
   @chex.assert_max_traces(n=1)
-  def update_step(self, params, aux_params, opt_state, batch, replay):
+  def update_step_inner(self, params, aux_params, opt_state, batch, replay):
     (value, aux_out), grads = value_and_grad(self.loss_Q, has_aux=True)(
       params, aux_params, replay)
     updates, opt_state = self.Q.opt.update(grads, opt_state)
@@ -330,6 +330,40 @@ class Agent:
     
     return self.loss_Q(sol.params_Q, sol.target_params_Q, replay)[0], sol
 
+  def loss_mle(self, params_T, batch, rng):
+    obs, action, reward, next_obs, not_done, not_done_no_max = batch
+    pred, means, logstds, reward_pred = self.model_pred(params_T, obs, action, rng)
+    assert next_obs.ndim == pred.ndim  # no undesired broadcasting
+    
+    nll = nll_loss(next_obs, means, logstds) if self.args.prob_model else mse_loss(pred, next_obs)
+    if not self.args.no_learn_reward:
+      assert reward_pred.ndim == reward.ndim  # no undesired broadcasting
+      nll += ((reward_pred - reward) ** 2).mean()
+    return nll
+
+  def loss_vep(self, params_T, aux_params, batch, rng):
+    assert not self.args.prob_model
+    obs, action, reward, next_obs, not_done, not_done_no_max = batch
+    pred, means, logstds, reward_pred = self.model_pred(params_T, obs, action, rng)
+    assert next_obs.ndim == pred.ndim  # no undesired broadcasting
+    nll = nll_loss(next_obs, means, logstds) if self.args.prob_model else mse_loss(pred, next_obs)
+    
+    # note that VFs are random
+    params_V = stop_gradient(aux_params)
+    next_V = self.V.net.apply(params_V, next_obs)
+    pred_V = self.V.net.apply(params_V, pred)
+    l = 0
+    for i in range(self.args.num_ensemble_vep):
+      l += jnp.mean((next_V[i] - pred_V[i])**2)
+
+    if not self.args.no_learn_reward:
+      assert reward_pred.ndim == reward.ndim  # no undesired broadcasting
+      l += ((reward_pred - reward) ** 2).mean()
+    aux_out = AuxOut(None, None, nll)
+    return l, aux_out
+
+
+
   @partial(jax.jit, static_argnums=(0,6))
   @chex.assert_max_traces(n=1) 
   def update_step_outer(self, params_T, aux_params, opt_state_T, batch, replay,loss):
@@ -342,6 +376,43 @@ class Agent:
       return UpdOut(value, new_params, opt_state_T, aux_out.loss_Q, 
         aux_out.vals_Q, aux_out.grad_norm_Q, aux_out.entropy_Q, aux_out.params_Q, 
         aux_out.target_params_Q, aux_out.opt_state_Q, aux_out.next_obs_nll)
+
+
+
+
+  @partial(jax.jit, static_argnums=(0,6))
+  #@chex.assert_max_traces(n=1)
+  def update_step(self, params, aux_params, opt_state, batch, replay, loss_type):
+
+    if loss_type == 'sql':
+      (value, aux_out), grads = value_and_grad(self.loss_Q, has_aux=True)(
+        params, aux_params, replay)
+      updates, opt_state = self.Q.opt.update(grads, opt_state)
+      new_params = optax.apply_updates(params, updates)
+      UpdOut = namedtuple('Upd_{}'.format(loss_type), 
+        'loss_Q params_Q opt_state_Q grads_Q grad_norm_Q vals_Q entropy_Q')
+      return UpdOut(value, new_params, opt_state, grads, tree_norm(grads), 
+        aux_out.vals_Q, aux_out.entropy_Q)
+
+    elif loss_type == "mle":
+      value, grads = value_and_grad(self.loss_mle)(params, replay, aux_params.rng)
+      updates, opt_state = self.T.opt.update(grads, opt_state)
+      new_params = optax.apply_updates(params, updates)
+      UpdOut = namedtuple('Upd_{}'.format(loss_type), 
+        'loss_T params_T opt_state_T')
+      return UpdOut(value, new_params, opt_state)
+
+    elif loss_type == "vep":
+      (value, aux_out), grads = value_and_grad(self.loss_vep, has_aux=True)(
+          params, aux_params.params_Q, replay, aux_params.rng)
+      updates, opt_state = self.T.opt.update(grads, opt_state)
+      new_params = optax.apply_updates(params, updates)
+      UpdOut = namedtuple('Upd_{}'.format(loss_type), 
+        'loss_T params_T opt_state_T next_obs_nll')
+      return UpdOut(value, new_params, opt_state, aux_out.next_obs_nll)
+
+
+
 
 
   def update(self, replay_buffer):
@@ -368,25 +439,69 @@ class Agent:
 
       updout = self.update_step_outer(self.params_T, aux_params, self.opt_state_T, 
                                         batch, replay, outer_loss)
-      # (value, aux_out), grads = value_and_grad(self.loss_omd, has_aux=True)(
-      #   self.params_T, aux_params, batch, replay)
-      # updates, self.opt_state_T = self.T.opt.update(grads, self.opt_state_T)
-      # new_params = optax.apply_updates(self.params_T, updates)
-      # UpdOut = namedtuple('Upd_{}'.format(loss_type), 
-      #   'loss_T params_T opt_state_T loss_Q vals_Q grad_norm_Q entropy_Q params_Q target_params_Q opt_state_Q next_obs_nll')
-      # updout = UpdOut(value, new_params, self.opt_state_T, aux_out.loss_Q, 
-      #   aux_out.vals_Q, aux_out.grad_norm_Q, aux_out.entropy_Q, aux_out.params_Q, 
-      #   aux_out.target_params_Q, aux_out.opt_state_Q, aux_out.next_obs_nll)
-
       self.params_Q, self.opt_state_Q = updout.params_Q, updout.opt_state_Q
       self.target_params_Q = updout.target_params_Q
       self.params_T, self.opt_state_T = updout.params_T, updout.opt_state_T
+
       return {'loss_T': updout.loss_T.item(), 
               'vals_Q': updout.vals_Q.item(), 
               'loss_Q': updout.loss_Q.item(), 
               'grad_norm_Q': updout.grad_norm_Q.item(), 
               'entropy_Q': updout.entropy_Q.item(),
               'next_obs_nll': updout.next_obs_nll.item()}
+
+
+    elif self.args.agent_type == 'mle':
+      for i in range(self.args.num_T_steps):
+        aux_params = AuxP(None, None, None, next(self.rngs))
+        replay = replay_buffer.sample(self.args.batch_size)
+        updout_T = self.update_step(self.params_T, aux_params, self.opt_state_T, 
+          None, replay, 'mle')
+        self.params_T, self.opt_state_T = updout_T.params_T, updout_T.opt_state_T
+
+      for i in range(self.args.num_Q_steps):
+        replay = replay_buffer.sample(self.args.batch_size)
+        replay_model, nll = self.batch_real_to_model(self.params_T, replay, next(self.rngs))
+        updout_Q = self.update_step(self.params_Q, self.target_params_Q, 
+          self.opt_state_Q, None, replay_model, 'sql')    
+        self.params_Q, self.opt_state_Q = updout_Q.params_Q, updout_Q.opt_state_Q
+        self.target_params_Q = soft_update_params(
+          self.args.tau, self.params_Q, self.target_params_Q)
+
+      return {'loss_T': updout_T.loss_T.item(), 
+              'vals_Q': updout_Q.vals_Q.item(), 
+              'loss_Q': updout_Q.loss_Q.item(), 
+              'grad_norm_Q': updout_Q.grad_norm_Q.item(), 
+              'entropy_Q': updout_Q.entropy_Q.item()}
+
+    elif self.args.agent_type == 'vep':
+      for i in range(self.args.num_T_steps):
+        aux_params = AuxP(self.params_V, None, None, next(self.rngs))
+        replay = replay_buffer.sample(self.args.batch_size)
+        updout_T = self.update_step(self.params_T, aux_params, self.opt_state_T, 
+          None, replay, 'vep')
+        self.params_T, self.opt_state_T = updout_T.params_T, updout_T.opt_state_T
+
+      for i in range(self.args.num_Q_steps):
+        replay = replay_buffer.sample(self.args.batch_size)
+        replay_model, nll = self.batch_real_to_model(self.params_T, replay, next(self.rngs))
+        updout_Q = self.update_step(self.params_Q, self.target_params_Q, 
+          self.opt_state_Q, None, replay_model, 'sql')    
+        self.params_Q, self.opt_state_Q = updout_Q.params_Q, updout_Q.opt_state_Q
+        self.target_params_Q = soft_update_params(
+          self.args.tau, self.params_Q, self.target_params_Q)
+
+      return {'loss_T': updout_T.loss_T.item(), 
+              'vals_Q': updout_Q.vals_Q.item(), 
+              'loss_Q': updout_Q.loss_Q.item(), 
+              'grad_norm_Q': updout_Q.grad_norm_Q.item(), 
+              'entropy_Q': updout_Q.entropy_Q.item(),
+              'next_obs_nll': updout_T.next_obs_nll.item()}
+
+
+
+
+
 
   # def save(self, agent_path):
   #   pickle.dump([self.params_Q, self.target_params_Q, self.params_T], 
