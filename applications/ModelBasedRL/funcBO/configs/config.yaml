@@ -2,7 +2,7 @@ env_name:  'CartPole-v1'
 seed: 0
 num_train_steps: 200000
 hidden_dim: 32
-model_hidden_dim: 32
+model_hidden_dim: 3
 batch_size: 256
 init_steps: 1000
 eval_frequency: 1000
