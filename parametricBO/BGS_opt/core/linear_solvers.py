@@ -28,7 +28,7 @@ class Normal_GD(LinearSolverAlg):
 		super(Normal_GD,self).__init__()
 		self.n_iter= n_iter
 		self.lr= lr
-	def __call__(self,linear_ p,b_vector,init,compute_latest=False):
+	def __call__(self,linear_op,b_vector,init,compute_latest=False):
 		out_lower = init
 		if linear_op.stochastic:
 			retain_graph = False
@@ -71,6 +71,36 @@ class CG(LinearSolverAlg):
 		x_last = tuple(x_last)
 		out_upper,_ = linear_op(x_last,retain_graph=False, which='upper')
 		return out_upper,x_last
+
+
+
+class Normal_CG(LinearSolverAlg):
+	## performs gd/sgd on quadratic loss 0.5 xAx+bx 
+	def __init__(self,n_iter=1, epsilon=1.0e-5):
+		super(Normal_CG,self).__init__()
+		self.n_iter= n_iter
+		self.epsilon = epsilon
+	def __call__(self,linear_op,b_vector,init,compute_latest=False):
+		
+		##### reverse 
+		b_vector = tuple([-b for b in b_vector])
+		if linear_op.stochastic:
+			retain_graph = False
+		else:
+			retain_graph = True
+
+		def Ax(x):
+			_, update = linear_op(x,retain_graph=retain_graph)
+			_, update = linear_op(update,retain_graph=retain_graph)
+			return update
+		_, norm_b_vector = linear_op(b_vector,retain_graph=retain_graph)
+
+		x_last, _ = cg(Ax,norm_b_vector, init,max_iter=self.n_iter, epsilon=self.epsilon)
+		x_last = tuple(x_last)
+		out_upper,_ = linear_op(x_last,retain_graph=False, which='upper')
+		return out_upper,x_last
+
+
 
 
 
@@ -121,7 +151,7 @@ def cg(Ax, b, x, max_iter=100, epsilon=1.0e-5):
 				break
 
 			beta = torch.sum(r_vec * r_vec) / rTr
-			p = [rr + beta * pp for rr, pp in zip(r, p_last)]
+			p = tuple([rr + beta * pp for rr, pp in zip(r, p_last)])
 
 			x_last = x
 			p_last = p
