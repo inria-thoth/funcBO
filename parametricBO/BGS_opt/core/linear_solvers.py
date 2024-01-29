@@ -5,7 +5,7 @@ from utils.helpers import get_gpu_usage
 
 
 class LinearSolverAlg(object):
-	def __call__(self,res_op,init):
+	def __call__(self):
 		raise NotImplementedError
 class GD(LinearSolverAlg):
 	## performs gd/sgd on quadratic loss 0.5 xAx+bx 
@@ -28,7 +28,7 @@ class Normal_GD(LinearSolverAlg):
 		super(Normal_GD,self).__init__()
 		self.n_iter= n_iter
 		self.lr= lr
-	def __call__(self,linear_op,b_vector,init,compute_latest=False):
+	def __call__(self,linear_ p,b_vector,init,compute_latest=False):
 		out_lower = init
 		if linear_op.stochastic:
 			retain_graph = False
@@ -46,6 +46,92 @@ class Normal_GD(LinearSolverAlg):
 			out_upper,_ = linear_op(out_lower,retain_graph=False, which='upper')
 
 		return out_upper,out_lower
+
+
+
+class CG(LinearSolverAlg):
+	## performs gd/sgd on quadratic loss 0.5 xAx+bx 
+	def __init__(self,n_iter=1, epsilon=1.0e-5):
+		super(CG,self).__init__()
+		self.n_iter= n_iter
+		self.epsilon = epsilon
+	def __call__(self,linear_op,b_vector,init,compute_latest=False):
+		
+		##### reverse 
+		b_vector = tuple([-b for b in b_vector])
+		if linear_op.stochastic:
+			retain_graph = False
+		else:
+			retain_graph = True
+
+		def Ax(x):
+			_, update = linear_op(x,retain_graph=retain_graph)
+			return update
+		x_last, _ = cg(Ax,b_vector, init,max_iter=self.n_iter, epsilon=self.epsilon)
+		x_last = tuple(x_last)
+		out_upper,_ = linear_op(x_last,retain_graph=False, which='upper')
+		return out_upper,x_last
+
+
+
+class Identity(LinearSolverAlg):
+	def __init__(self,n_iter=1, epsilon=1.0e-5):
+		super(Identity,self).__init__()
+		self.n_iter= n_iter
+		self.epsilon = epsilon
+	def __call__(self,linear_op,b_vector,init,compute_latest=False):
+		
+		##### reverse 
+		b_vector = tuple([-b for b in b_vector])
+
+		out_upper,_ = linear_op(b_vector,retain_graph=False, which='upper')
+		return out_upper,b_vector
+
+
+# adapted from https://github.com/JunjieYang97/stocBiO/blob/master/Hyperparameter-optimization/hypergrad/CG_torch.py
+def cg(Ax, b, x, max_iter=100, epsilon=1.0e-5):
+		""" Conjugate Gradient
+			Args:
+				Ax: function, takes list of tensors as input
+				b: list of tensors
+			Returns:
+				x_star: list of tensors
+		"""
+
+		x_last = x
+		init_Ax = Ax(x_last)
+		r_last = tuple([bb-ax for bb,ax in zip(b,init_Ax)])
+		p_last = tuple([torch.zeros_like(rr).copy_(rr) for rr in r_last])
+		counter_hess = 1
+		for ii in range(max_iter):
+			Ap = Ax(p_last)
+			counter_hess +=1
+			Ap_vec = cat_list_to_tensor(Ap)
+			p_last_vec = cat_list_to_tensor(p_last)
+			r_last_vec = cat_list_to_tensor(r_last)
+			rTr = torch.sum(r_last_vec * r_last_vec)
+			pAp = torch.sum(p_last_vec * Ap_vec)
+			alpha = rTr / pAp
+
+			x = tuple([xx + alpha * pp for xx, pp in zip(x_last, p_last)])
+			r = tuple([rr - alpha * pp for rr, pp in zip(r_last, Ap)])
+			r_vec = cat_list_to_tensor(r)
+
+			if float(torch.norm(r_vec)) < epsilon:
+				break
+
+			beta = torch.sum(r_vec * r_vec) / rTr
+			p = [rr + beta * pp for rr, pp in zip(r, p_last)]
+
+			x_last = x
+			p_last = p
+			r_last = r
+
+		return x_last,counter_hess
+
+
+def cat_list_to_tensor(list_tx):
+		return torch.cat([xx.view([-1]) for xx in list_tx])
 
 
 # class MinresQLP(LinearSolverAlg):

@@ -162,7 +162,7 @@ class Trainer:
 
         # Outer objective function
         def fo(lower_var,Z_outer, Y_outer, upper_var): 
-            inner_data  = self.inner_solution.linear_op.inputs
+            inner_data  = self.inner_solution.optimizer.inputs
             z,x,_ = projector(inner_data)
             outer_val = self.functional_outer_model(upper_var,x)
             inner_val = self.functional_inner_model(lower_var,z)
@@ -274,7 +274,7 @@ class Trainer:
                     if self.args.iterative_2nd_stage: 
                         inputs = opt_lower_var, Y_outer
 
-                loss = self.outer_loss(inputs)
+                loss = self.outer_loss(*inputs)
 
                 # Backpropagation
                 self.outer_optimizer.zero_grad()
@@ -329,8 +329,15 @@ class Trainer:
                 Z_inner = Z.to(self.device)
                 X_inner = X.to(self.device)
             treatment_1st_feature = self.outer_model(X_inner) #torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_inner)
-            instrumental_1st_feature = self.inner_model.model(Z_inner)
-            instrumental_2nd_feature = self.inner_model.model(Z_outer)
+            
+            instrumental_1st_feature = self.inner_model(Z_inner)
+            instrumental_2nd_feature = self.inner_model(Z_outer)            
+
+            if 'iterative_2nd_stage' in self.args:
+                if self.args.iterative_2nd_stage:
+                    instrumental_1st_feature = self.inner_model.model(Z_inner)
+                    instrumental_2nd_feature = self.inner_model.model(Z_outer)
+
             feature = augment_stage1_feature(instrumental_1st_feature)
             stage1_weight = fit_linear(treatment_1st_feature, feature, self.Nlam_V)
             feature = augment_stage1_feature(instrumental_2nd_feature)

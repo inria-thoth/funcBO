@@ -150,6 +150,8 @@ class ArgMinOp(torch.autograd.Function):
 		lower_var = ctx.saved_tensors[:len_lower]
 		grad = ctx.grad
 		inputs = ctx.inputs
+		grad_output = grad_output[:-1]
+
 		with  torch.enable_grad():
 			
 			if len(iterates)>1:
@@ -220,9 +222,8 @@ class DiffOpt(object):
 		self.unrolled_iter = unrolled_iter
 		self.warm_start_iter = warm_start_iter
 		self.track_grad_for_backward = track_grad_for_backward
-
 		assert (self.warm_start_iter + self.unrolled_iter >0) 
-	
+		self.inputs = None
 	def update_lr(self,lr):
 		self.optimizer = config_to_instance(**self.config_opt,lr=lr)
 		
@@ -281,6 +282,7 @@ class DiffOpt(object):
 
 		avg_val = avg_val/total_iter
 
+		self.inputs = inputs
 		return all_lower_var, avg_val,all_grad,inputs
 
 

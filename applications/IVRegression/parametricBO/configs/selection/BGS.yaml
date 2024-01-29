@@ -19,9 +19,9 @@ scheduler:
   #T_max: ${training.total_epoch}
   use_scheduler: False
 linear_solver:
-  name: 'core.linear_solvers.GD' #'core.linear_solvers.Normal_GD' # (grid search)
-  lr: 0.0001
-  n_iter: 2
+  name: 'core.linear_solvers.Identity' #'core.linear_solvers.CG' , 'core.linear_solvers.Normal_GD' # (grid search)
+  #lr: 0.0001
+  n_iter: 1
 linear_op: 
   name: 'core.selection.HessianOp'
   stochastic: False
