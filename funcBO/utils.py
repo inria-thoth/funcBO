@@ -326,7 +326,6 @@ def auxiliary_toy_data():
   print("True coeficients:", coef)
   print("X training data:", X_train[1:5])
   print("y training labels:", y_train[1:5])
-  print()
   return n, m, X_train, X_val, y_train, y_val, coef
 
 def tensor_to_state_dict(model, params, device):

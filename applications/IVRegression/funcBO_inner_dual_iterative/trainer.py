@@ -63,8 +63,8 @@ class Trainer:
         self.inner_dataloader = DataLoader(dataset=inner_data, batch_size=self.args.batch_size, shuffle=False)
         outer_data = DspritesTrainData(outer_data)
         self.outer_dataloader = DataLoader(dataset=outer_data, batch_size=self.args.batch_size, shuffle=False)
-        if validation_data:
-            self.validation_data = TrainDataSetTorch.from_numpy(validation_data, device=device, dtype=self.dtype)
+        if validation_data is not None:
+            self.validation_data = TrainDataSetTorch.from_numpy(validation_data, device=device)
         else:
             self.validation_data = validation_data
 
@@ -72,14 +72,17 @@ class Trainer:
         self.inner_model, self.outer_model = build_net_for_dsprite(self.args.seed, method='sequential+linear')
         self.inner_model.to(device)
         self.outer_model.to(device)
-        
+
+        self.stage2_weight = torch.nn.parameter.Parameter(torch.randn((self.args.weight2_dim,1), device=device, dtype=self.dtype))
+        self.stage2_weight.requires_grad = True
+
         # The outer neural network parametrized by the outer variable
         self.outer_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.outer_model, device))
 
         self.inner_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.inner_model, device))
 
         # Optimizer that improves the outer variable
-        self.outer_optimizer = torch.optim.Adam([self.outer_param], 
+        self.outer_optimizer = torch.optim.Adam([self.outer_param, self.stage2_weight], 
                                         lr=self.args.outer_optimizer.outer_lr, 
                                         weight_decay=self.args.outer_optimizer.outer_wd)
 
@@ -87,18 +90,15 @@ class Trainer:
         inner_dual_scheduler = None
         outer_scheduler = None
 
-        def ridge_func(weight,lam):
+        def ridge_func(weight, lam):
             return lam * torch.norm(weight) ** 2
-
-        reg_func = lambda weight: ridge_func(weight, self.lam_V)
-
+            
         # Outer objective function
         def fo(g_z_out, Y):
-            res = fit_2n_stage(
-                            g_z_out, 
-                            Y,  
-                            self.lam_u)
-            return res["stage2_loss"]
+            feature = augment_stage2_feature(g_z_out)
+            pred = linear_reg_pred(feature, self.stage2_weight)
+            stage2_loss = torch.norm((Y - pred)) ** 2 + ridge_func(self.stage2_weight, self.lam_u)
+            return stage2_loss
 
         # Inner objective function that depends only on the inner prediction
         def fi(treatment_feature, instrumental_feature):#, backward_mode=False):
@@ -110,7 +110,7 @@ class Trainer:
             feature = augment_stage1_feature(instrumental_feature)
             weight = fit_linear(treatment_feature, feature, self.Nlam_V)
             pred = linear_reg_pred(feature, weight)
-            loss = torch.norm((treatment_feature - pred)) ** 2 + ridge_func(weight,self.Nlam_V)
+            loss = torch.norm((treatment_feature - pred)) ** 2 + ridge_func(weight, self.Nlam_V)
             return loss, weight
 
         def projector(data):
@@ -214,21 +214,6 @@ class Trainer:
         self.inner_solution.eval()
         self.inner_model.eval()
         with torch.no_grad():
-            for Z, X, Y in self.outer_dataloader:
-                Z_outer = Z.to(self.device)
-                Y_outer = Y.to(self.device)
-            for Z, X, Y in self.inner_dataloader:
-                Z_inner = Z.to(self.device)
-                X_inner = X.to(self.device)
-            treatment_1st_feature = torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_inner)
-            instrumental_1st_feature = self.inner_model.model(Z_inner)
-            instrumental_2nd_feature = self.inner_model.model(Z_outer)
-            feature = augment_stage1_feature(instrumental_1st_feature)
-            stage1_weight = fit_linear(treatment_1st_feature, feature, self.Nlam_V)
-            feature = augment_stage1_feature(instrumental_2nd_feature)
-            predicted_treatment_feature = linear_reg_pred(feature, stage1_weight)
-            feature = augment_stage2_feature(predicted_treatment_feature)
-            stage2_weight = fit_linear(Y_outer, feature, self.lam_u)
             if data_type == "test":
                 Y_eval = self.test_data.structural
                 X_eval = self.test_data.treatment
@@ -237,20 +222,9 @@ class Trainer:
                 X_eval = self.validation_data.treatment
             treatment_feature = torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_eval)
             eval_feature = augment_stage2_feature(treatment_feature)
-            eval_pred = linear_reg_pred(eval_feature, stage2_weight)
+            eval_pred = linear_reg_pred(eval_feature, self.stage2_weight)
             loss = (torch.norm((Y_eval - eval_pred)) ** 2) / Y_eval.size(0)
         self.outer_model.train(previous_state_outer_model)
         self.inner_solution.train(previous_state_inner_solution)
         self.inner_model.train(previous_state_inner_model)
         return loss
-
-
-
-
-
-
-
-
-
-
-

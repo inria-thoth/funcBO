@@ -11,8 +11,7 @@ scheduler:
   cleanup_cmd: 'source gpu_setVisibleDevices.sh'
   option_cmd: ["-l core=1, walltime=50:00:00",
                 "-t besteffort",
-                "-t idempotent",
-                "-p gpumem>'16000' and not host like 'gpuhost25' and not host like 'gpuhost26' and not host like 'gpuhost8'"
+                "-p gpumem>'16000' and gpumodel='rtxA5000' and not host like 'gpuhost25' and not host like 'gpuhost26' and not host like 'gpuhost8'"
               ]
 version_manager:
   name: GitVM

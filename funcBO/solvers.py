@@ -35,7 +35,7 @@ class IterativeSolver(Solver):
   Iterative solver.
   """
   def __init__(self, model, objective, optimizer, scheduler=None, reg=0, num_iter=1):
-    super(IterativeSolver, self).__init__(model, objective,reg=reg)
+    super(IterativeSolver, self).__init__(model, objective, reg=reg)
     self.optimizer = config_to_instance(**optimizer, params=model.parameters())
     if scheduler:
       self.scheduler = config_to_instance(**scheduler, optimizer=self.optimizer)

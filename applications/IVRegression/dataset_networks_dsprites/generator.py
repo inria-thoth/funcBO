@@ -14,6 +14,7 @@ from typing import NamedTuple, Optional, Tuple
 from sklearn.model_selection import train_test_split
 from funcBO.utils import set_seed
 
+# NumPy dataset for dsprite data used by DFIV.
 class TrainDataSet(NamedTuple):
     treatment: np.ndarray
     instrumental: np.ndarray
@@ -21,11 +22,13 @@ class TrainDataSet(NamedTuple):
     outcome: np.ndarray
     structural: np.ndarray
 
+# NumPy dataset for dsprite data used by DFIV.
 class TestDataSet(NamedTuple):
     treatment: np.ndarray
     covariate: Optional[np.ndarray]
     structural: np.ndarray
 
+# PyTorch dataset for dsprite data used by DFIV.
 class TrainDataSetTorch(NamedTuple):
     treatment: torch.Tensor
     instrumental: torch.Tensor
@@ -54,7 +57,7 @@ class TrainDataSetTorch(NamedTuple):
                                  outcome=self.outcome.cuda(),
                                  structural=self.structural.cuda())
 
-
+# PyTorch dataset for dsprite data used by DFIV.
 class TestDataSetTorch(NamedTuple):
     treatment: torch.Tensor
     covariate: torch.Tensor
@@ -76,8 +79,34 @@ class TestDataSetTorch(NamedTuple):
                                 covariate=covariate,
                                 structural=self.structural.cuda())
 
-DATA_PATH = pathlib.Path(__file__).resolve().parent
+# Generic dataset for dsprite data used by funcBO.
+class DspritesTrainData(Dataset):
+  def __init__(self, train_data: TrainDataSetTorch):
+    self.train_data = train_data
+    self.len = len(self.train_data.outcome)
 
+  def __getitem__(self, index):
+    # return Z, X, Y
+    return self.train_data.instrumental[index], self.train_data.treatment[index], self.train_data.outcome[index]
+
+  def __len__(self):
+    return self.len
+
+# Generic dataset for dsprite data used by funcBO.
+class DspritesTestData(Dataset):
+  def __init__(self, test_data: TestDataSet):
+    self.test_data = test_data
+    self.len = len(self.test_data.structural)
+
+  def __getitem__(self, index):
+    # return X, Y
+    return self.test_data.treatment[index], self.test_data.structural[index]
+
+  def __len__(self):
+    return self.len
+
+# Functions to generate dsprite data from DFIV paper.
+DATA_PATH = pathlib.Path(__file__).resolve().parent
 def image_id(latent_bases: np.ndarray, posX_id_arr: np.ndarray, posY_id_arr: np.ndarray,
              orientation_id_arr: np.ndarray,
              scale_id_arr: np.ndarray):
@@ -87,10 +116,8 @@ def image_id(latent_bases: np.ndarray, posX_id_arr: np.ndarray, posY_id_arr: np.
     idx = np.c_[color_id_arr, shape_id_arr, scale_id_arr, orientation_id_arr, posX_id_arr, posY_id_arr]
     return idx.dot(latent_bases)
 
-
 def structural_func(image, weights):
     return (np.mean((image.dot(weights))**2, axis=1) - 5000) / 1000
-
 
 def generate_test_dsprite(device):
     with FileLock("./data.lock"):
@@ -148,24 +175,47 @@ def generate_train_dsprite(data_size, rand_seed, val_size=0):
     outcome = structural + outcome_noise
     structural = structural[:, np.newaxis]
     outcome = outcome[:, np.newaxis]
+    train_data_final = TrainDataSet(treatment=treatment,
+                        instrumental=instrumental,
+                        covariate=None,
+                        structural=structural,
+                        outcome=outcome)
     if val_size == 0:
-        train_data_final = TrainDataSet(treatment=treatment,
-                            instrumental=instrumental,
-                            covariate=None,
-                            structural=structural,
-                            outcome=outcome)
         validation_data_final = None
     else:
-        train_data_final = TrainDataSet(treatment=treatment[:-val_size, :],
-                            instrumental=instrumental[:-val_size, :],
-                            covariate=None,
-                            structural=structural[:-val_size, :],
-                            outcome=outcome[:-val_size, :])
+        data_size = val_size
+        with FileLock("./data.lock"):
+            dataset_zip = np.load(DATA_PATH.joinpath("dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz"),
+                                allow_pickle=True, encoding="bytes")
+            weights = np.load(DATA_PATH.joinpath("dsprite_mat.npy"))
+
+        imgs = dataset_zip['imgs']
+        latents_values = dataset_zip['latents_values']
+        metadata = dataset_zip['metadata'][()]
+
+        latents_sizes = metadata[b'latents_sizes']
+        latents_bases = np.concatenate((latents_sizes[::-1].cumprod()[::-1][1:], np.array([1, ])))
+
+        rng = default_rng(seed=rand_seed)
+        posX_id_arr = rng.integers(32, size=data_size)
+        posY_id_arr = rng.integers(32, size=data_size)
+        scale_id_arr = rng.integers(6, size=data_size)
+        orientation_arr = rng.integers(40, size=data_size)
+        image_idx_arr = image_id(latents_bases, posX_id_arr, posY_id_arr, orientation_arr, scale_id_arr)
+        treatment = imgs[image_idx_arr].reshape((data_size, 64 * 64)).astype(np.float64)
+        treatment += rng.normal(0.0, 0.1, treatment.shape)
+        latent_feature = latents_values[image_idx_arr]  # (color, shape, scale, orientation, posX, posY)
+        instrumental = latent_feature[:, 2:5]  # (scale, orientation, posX)
+        outcome_noise = (posY_id_arr - 16.0) + rng.normal(0.0, 0.5, data_size)
+        structural = structural_func(treatment, weights)
+        outcome = structural + outcome_noise
+        structural = structural[:, np.newaxis]
+        outcome = outcome[:, np.newaxis]
         validation_data_final = TrainDataSet(treatment=treatment[-val_size:, :],
-                            instrumental=instrumental[-val_size:, :],
-                            covariate=None,
-                            structural=structural[-val_size:, :],
-                            outcome=outcome[-val_size:, :])
+                                instrumental=instrumental[-val_size:, :],
+                                covariate=None,
+                                structural=structural[-val_size:, :],
+                                outcome=outcome[-val_size:, :])
     return train_data_final, validation_data_final
 
 
@@ -183,36 +233,7 @@ def split_train_data(train_data, split_ratio, rand_seed=42, device='cpu', dtype=
 
     return train_1st_data_t, train_2nd_data_t
 
-class DspritesTrainData(Dataset):
-  """
-  A class for input data.
-  """
-  def __init__(self, train_data: TrainDataSetTorch):
-    self.train_data = train_data
-    self.len = len(self.train_data.outcome)
-
-  def __getitem__(self, index):
-    # return Z, X, Y
-    return self.train_data.instrumental[index], self.train_data.treatment[index], self.train_data.outcome[index]
-
-  def __len__(self):
-    return self.len
-
-class DspritesTestData(Dataset):
-  """
-  A class for input data.
-  """
-  def __init__(self, test_data: TestDataSet):
-    self.test_data = test_data
-    self.len = len(self.test_data.structural)
-
-  def __getitem__(self, index):
-    # return X, Y
-    return self.test_data.treatment[index], self.test_data.structural[index]
-
-  def __len__(self):
-    return self.len
-
+# Instrumental network from DFIV paper.
 class InnerModel(nn.Module):
     def __init__(self, sequential):
         super(InnerModel, self).__init__()
@@ -235,28 +256,10 @@ class InnerModelLinearHead(nn.Module):
         x = torch.cat((x, ones), dim=1)
         return self.linear(x)
 
+# Treatment network from DFIV paper.
 class OuterModel(nn.Module):
     def __init__(self):
         super(OuterModel, self).__init__()
-        self.model = nn.Sequential(nn.Linear(64 * 64, 1024),#spectral_norm(nn.Linear(64 * 64, 1024)),
-                                    nn.ReLU(),
-                                    nn.Linear(1024, 512),#spectral_norm(nn.Linear(1024, 512)),
-                                    nn.ReLU(),
-                                    #nn.BatchNorm1d(512),
-                                    nn.Linear(512, 128),#spectral_norm(nn.Linear(512, 128)),
-                                    nn.ReLU(),
-                                    nn.Linear(128, 32),#spectral_norm(nn.Linear(128, 32)),
-                                    #nn.BatchNorm1d(32),
-                                    nn.Tanh()
-                                )
-
-    def forward(self, x):
-        res = self.model(x)
-        return res
-
-class OuterModelWithNorms(nn.Module):
-    def __init__(self):
-        super(OuterModelWithNorms, self).__init__()
         self.model = nn.Sequential(spectral_norm(nn.Linear(64 * 64, 1024)),
                                     nn.ReLU(),
                                     spectral_norm(nn.Linear(1024, 512)),
@@ -268,72 +271,29 @@ class OuterModelWithNorms(nn.Module):
                                     nn.LayerNorm(32),#nn.BatchNorm1d(32),
                                     nn.Tanh()
                                 )
-
-        # self.model = nn.Sequential(nn.Linear(64 * 64, 1024),
-        #                             nn.ReLU(),
-        #                             nn.Linear(1024, 512),
-        #                             nn.ReLU(),
-        #                             nn.Linear(512, 128),
-        #                             nn.ReLU(),
-        #                             nn.Linear(128, 32),
-        #                             nn.Tanh()
-        #                         )
-
-
+                                
     def forward(self, x):
         res = self.model(x)
         return res
 
+# Building networks used in IV regression for dsprite data.
 def build_net_for_dsprite(seed, method='sequential'):
-    torch.manual_seed(seed)
-    sequential = nn.Sequential(nn.Linear(3, 256),#spectral_norm(nn.Linear(3, 256)),
-                                nn.ReLU(),
-                                nn.Linear(256, 128),#spectral_norm(nn.Linear(256, 128)),
-                                nn.ReLU(),
-                                #nn.BatchNorm1d(128),
-                                nn.Linear(128, 128),#spectral_norm(nn.Linear(128, 128)),
-                                nn.ReLU(),
-                                #nn.BatchNorm1d(128),
-                                nn.Linear(128, 32),#spectral_norm(nn.Linear(128, 32)),
-                                #nn.BatchNorm1d(32),
-                                nn.ReLU()
-                            )
-    torch.manual_seed(seed)
-    response_net = OuterModel()
-    if method == 'sequential':
-        instrumental_net = InnerModel(sequential)
-    elif method == 'sequential+linear':
-        instrumental_net = InnerModelLinearHead(sequential)
-    return instrumental_net, response_net
-
-def build_net_for_dsprite_with_norms(seed, method='sequential'):
     set_seed(seed)
     sequential = nn.Sequential(spectral_norm(nn.Linear(3, 256)),
                                     nn.ReLU(),
                                     spectral_norm(nn.Linear(256, 128)),
                                     nn.ReLU(),
-                                    nn.LayerNorm(128),#nn.BatchNorm1d(128),
+                                    nn.LayerNorm(128),
                                     spectral_norm(nn.Linear(128, 128)),
                                     nn.ReLU(),
-                                    nn.LayerNorm(128),#nn.BatchNorm1d(128),
+                                    nn.LayerNorm(128),
                                     spectral_norm(nn.Linear(128, 32)),
-                                    nn.LayerNorm(32),#nn.BatchNorm1d(32),
+                                    nn.LayerNorm(32),
                                     nn.ReLU()
                             )
 
-    # sequential = nn.Sequential(nn.Linear(3, 256),
-    #                                 nn.ReLU(),
-    #                                 nn.Linear(256, 128),
-    #                                 nn.ReLU(),
-    #                                 nn.Linear(128, 128),
-    #                                 nn.ReLU(),
-    #                                 nn.Linear(128, 32),
-    #                                 nn.ReLU()
-    #                         )
-
-
     set_seed(seed)
-    response_net = OuterModelWithNorms()
+    response_net = OuterModel()
     if method == 'sequential':
         instrumental_net = InnerModel(sequential)
     elif method == 'sequential+linear':

@@ -1,16 +1,12 @@
 import mlxp
 from funcBO.utils import set_seed 
 from applications.IVRegression.parametricBO.trainer import Trainer
-
-
 from omegaconf import OmegaConf
 
 def resolve_tuple(*args):
     return tuple(args)
 
 OmegaConf.register_new_resolver('as_tuple', resolve_tuple)
-
-
 
 @mlxp.launch(config_path='./configs',
              seeding_function=set_seed)

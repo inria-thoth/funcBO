@@ -10,3 +10,5 @@
 multirun.yaml
 data.lock
 /figures
+tmp.sh
+res

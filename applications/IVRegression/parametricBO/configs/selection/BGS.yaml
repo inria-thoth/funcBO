@@ -9,10 +9,8 @@ dual_var_warm_start: True
 
 optimizer:
   name: 'torchopt.adam'
-  #momentum: 0.0
   lr: 0.001 # (grid search)
   weight_decay: 0.0 # no need for this (use lam_V)
-  # name: 'TorchOpt.adam'
   betas : ${as_tuple:0.9,0.999}
   eps: 0.00000001
   eps_root: 0.0
@@ -22,8 +20,8 @@ scheduler:
   use_scheduler: False
 linear_solver:
   name: 'core.linear_solvers.GD' #'core.linear_solvers.Normal_GD' # (grid search)
-  lr: 0.001 # (grid search)
-  n_iter: 20
+  lr: 0.0001
+  n_iter: 2
 linear_op: 
   name: 'core.selection.HessianOp'
   stochastic: False

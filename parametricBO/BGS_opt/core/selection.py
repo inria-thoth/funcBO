@@ -323,9 +323,13 @@ class HessianOp(object):
 
 
 			self.inputs = next(self.cur_generator)
+			# Trying adding reg. to Hessian
+			#flattened_tensors = [tensor.flatten() for tensor in self.lower_var]
+			#concatenated_vector = torch.cat(flattened_tensors, dim=0)
+			# Trying adding reg. to Hessian
 			val = self.func(self.inputs,
 						self.upper_var,
-						self.lower_var)
+						self.lower_var)# + 1.0 * torch.norm(concatenated_vector)**2
 
 			params = self.upper_var+self.lower_var
 			

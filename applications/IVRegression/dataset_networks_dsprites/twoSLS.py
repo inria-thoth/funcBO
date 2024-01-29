@@ -2,9 +2,6 @@ import torch
 import numpy as np
 from torch import nn
 
-# Loss helper functions
-MSE = nn.MSELoss()
-
 def augment_stage1_feature(instrumental_feature):
     feature = instrumental_feature
     feature = add_const_col(feature)

@@ -1,6 +1,6 @@
 import torch
-from applications.IVRegression.dsprites_data.trainer import *
-from applications.IVRegression.dsprites_data.generator import *
+from applications.IVRegression.dataset_networks_dsprites.twoSLS import *
+from applications.IVRegression.dataset_networks_dsprites.generator import *
 import time
 from funcBO.utils import assign_device, get_dtype
 
@@ -8,7 +8,7 @@ class Trainer:
     """
     Solves an instrumental regression problem using the DFIV method.
     """
-    def __init__(self, config, logger, NNs_with_norms=False):
+    def __init__(self, config, logger):
         """
         Initializes the Trainer class with the provided configuration and logger.
 
@@ -21,7 +21,6 @@ class Trainer:
         self.device = assign_device(self.args.system.device)
         self.dtype = get_dtype(self.args.system.dtype)
         torch.set_default_dtype(self.dtype)
-        self.NNs_with_norms = NNs_with_norms
         self.build_trainer()
 
     def log(self,dico, log_name='metrics'):
@@ -41,11 +40,7 @@ class Trainer:
         self.inner_data, self.outer_data = split_train_data(train_data, split_ratio=self.args.split_ratio, rand_seed=self.args.seed, device=device, dtype=self.dtype)
         self.test_data = TestDataSetTorch.from_numpy(test_data, device=device, dtype=self.dtype)
 
-        # Neural networks for dsprites data
-        #if self.NNs_with_norms:
-        instrumental_network, treatment_network = build_net_for_dsprite_with_norms(self.args.seed, method='sequential')
-        #else:
-        #    instrumental_network, treatment_network = build_net_for_dsprite(self.args.seed, method='sequential')
+        instrumental_network, treatment_network = build_net_for_dsprite(self.args.seed, method='sequential')
         instrumental_network.to(device)
         treatment_network.to(device)
 
