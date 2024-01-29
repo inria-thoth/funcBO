@@ -4,13 +4,12 @@
 parent_work_dir="../../data/.workdir"
 
 # Grid search over hyperparameters
-# outer_optimizer.outer_lr=0.01,0.001,0.0001\
+# outer_optimizer.outer_lr=0.01,0.001,0.0001,0.00001\
 # outer_optimizer.outer_wd=0.1,0.01,0.001\
-# inner_solver.optimizer.lr=0.01,0.001,0.0001\
+# inner_solver.optimizer.lr=0.01,0.001,0.0001,0.00001\
 # inner_solver.optimizer.weight_decay=0.1,0.01,0.001\
-# dual_solver.optimizer.lr=0.01,0.001,0.0001\
+# dual_solver.optimizer.lr=0.01,0.001,0.0001,0.00001\
 # dual_solver.optimizer.weight_decay=0.1,0.01,0.001\
-# dual_solver.num_iter=1,10,20\
 
 # Run the main script Functional Bilevel Optimization with linear closed form gradient
 parent_log_dir="../../data/outputs/funcBO_inner_dual_iterative"

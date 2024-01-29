@@ -63,8 +63,8 @@ class Trainer:
         self.inner_dataloader = DataLoader(dataset=inner_data, batch_size=self.args.batch_size, shuffle=False)
         outer_data = DspritesTrainData(outer_data)
         self.outer_dataloader = DataLoader(dataset=outer_data, batch_size=self.args.batch_size, shuffle=False)
-        if validation_data is not None:
-            self.validation_data = TrainDataSetTorch.from_numpy(validation_data, device=device)
+        if validation_data:
+            self.validation_data = TrainDataSetTorch.from_numpy(validation_data, device=device, dtype=self.dtype)
         else:
             self.validation_data = validation_data
 
@@ -230,21 +230,15 @@ class Trainer:
             feature = augment_stage2_feature(predicted_treatment_feature)
             stage2_weight = fit_linear(Y_outer, feature, self.lam_u)
             if data_type == "test":
-                Y_test = self.test_data.structural
-                X_test = self.test_data.treatment
-                treatment_feature = torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_test)
-                test_feature = augment_stage2_feature(treatment_feature)
-                test_pred = linear_reg_pred(test_feature, stage2_weight)
-                loss = (torch.norm((Y_test - test_pred)) ** 2) / Y_test.size(0)
+                Y_eval = self.test_data.structural
+                X_eval = self.test_data.treatment
             elif data_type == "validation":
-                Z_val = self.validation_data.instrumental
-                Y_val = self.validation_data.outcome
-                val_value = self.inner_solution(Z_val)
-                feature = augment_stage1_feature(val_value)
-                predicted_treatment_feature = linear_reg_pred(feature, stage1_weight)
-                val_feature = augment_stage2_feature(predicted_treatment_feature)
-                val_pred = linear_reg_pred(val_feature, stage2_weight)
-                loss = (torch.norm((Y_val - val_pred)) ** 2) / Y_val.size(0)
+                Y_eval = self.validation_data.outcome
+                X_eval = self.validation_data.treatment
+            treatment_feature = torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_eval)
+            eval_feature = augment_stage2_feature(treatment_feature)
+            eval_pred = linear_reg_pred(eval_feature, stage2_weight)
+            loss = (torch.norm((Y_eval - eval_pred)) ** 2) / Y_eval.size(0)
         self.outer_model.train(previous_state_outer_model)
         self.inner_solution.train(previous_state_inner_solution)
         self.inner_model.train(previous_state_inner_model)

@@ -81,7 +81,7 @@ class Trainer:
         outer_data = DspritesTrainData(outer_data)
         self.outer_dataloader = DataLoader(dataset=outer_data, batch_size=self.args.batch_size, shuffle=False)
         if validation_data is not None:
-            self.validation_data = TrainDataSetTorch.from_numpy(validation_data, device=device)
+            self.validation_data = TrainDataSetTorch.from_numpy(validation_data, device=device, dtype=self.dtype)
         else:
             self.validation_data = validation_data
 
@@ -256,126 +256,54 @@ class Trainer:
                 done = (self.iters >= self.args.max_epochs)
                 if done:
                     break
+        if self.validation_data:
+            val_log = [{'inner_iter': 0,
+                        'val loss': (self.evaluate(data_type="validation")).item()}]
+            self.log_metrics_list(val_log, 0, log_name='val_metrics')
         test_log = [{'inner_iter': 0,
                     'test loss': (self.evaluate(data_type="test")).item()}]
         self.log_metrics_list(test_log, 0, log_name='test_metrics')
 
-    # def train(self):
-
-
-    #     def eval_model(Z):
-
-    #         outer_NN_dic = tensor_to_state_dict(self.inner_model, 
-    #                                         self.inner_param, 
-    #                                             self.device)
-    #         out = (torch.func.functional_call(self.inner_model, 
-    #                             parameter_and_buffer_dicts=outer_NN_dic, 
-    #                             args=Z,
-    #                             strict=True))
-    #         return out
-
-
-    #     for Z, X, Y in self.outer_dataloader:
-    #         Z_out = Z
-
-    #     self.inner_model.eval()
-    #     params, buffers = torch.func.stack_module_state([self.inner_model])
-    #     print(buffers)
-    #     out = eval_model(Z)
-    #     params, buffers = torch.func.stack_module_state([self.inner_model])
-    #     print(buffers)
-    #     out = eval_model(Z)
-    #     params, buffers = torch.func.stack_module_state([self.inner_model])
-    #     print(buffers)
-    #     self.inner_model.train(True)
-    #     params, buffers = torch.func.stack_module_state([self.inner_model])
-    #     print(buffers)
-
-    #     out = eval_model(Z)
-
-    #     params, buffers = torch.func.stack_module_state([self.inner_model])
-    #     print(buffers)
-    #     self.inner_model.train(False)
-
-    #     params, buffers = torch.func.stack_module_state([self.inner_model])
-    #     print(buffers)
-
-    #     out = eval_model(Z)
-
-    #     params, buffers = torch.func.stack_module_state([self.inner_model])
-    #     print(buffers)
-
-    #     print(out)
-
-
-
-
-
-
-
     def evaluate(self, data_type="validation"):
         """
         Evaluates the performance of the model on the given data.
-
-        Parameters:
-        - data (object): Data object containing outcome and treatment information.
-        - last_layer (tensor): Last layer weights for an additional transformation. Defaults to None.
-
         Returns:
         - float: The evaluation loss on the provided data.
         """
         #outer_NN_dic = tensor_to_state_dict(self.outer_model, self.outer_param, self.device)
         previous_state_outer_model = self.outer_model.training
+        previous_state_inner_solution = self.inner_solution.training
         previous_state_inner_model = self.inner_model.training
         self.outer_model.eval()
+        self.inner_solution.eval()
         self.inner_model.eval()
         with torch.no_grad():
+            for Z, X, Y in self.outer_dataloader:
+                Z_outer = Z.to(self.device)
+                Y_outer = Y.to(self.device)
+            for Z, X, Y in self.inner_dataloader:
+                Z_inner = Z.to(self.device)
+                X_inner = X.to(self.device)
+            treatment_1st_feature = self.outer_model(X_inner) #torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_inner)
+            instrumental_1st_feature = self.inner_model.model(Z_inner)
+            instrumental_2nd_feature = self.inner_model.model(Z_outer)
+            feature = augment_stage1_feature(instrumental_1st_feature)
+            stage1_weight = fit_linear(treatment_1st_feature, feature, self.Nlam_V)
+            feature = augment_stage1_feature(instrumental_2nd_feature)
+            predicted_treatment_feature = linear_reg_pred(feature, stage1_weight)
+            feature = augment_stage2_feature(predicted_treatment_feature)
+            stage2_weight = fit_linear(Y_outer, feature, self.lam_u)
             if data_type == "test":
-                for Z, X, Y in self.outer_dataloader:
-                    Z_outer = Z.to(self.device)
-                    Y_outer = Y.to(self.device)
-                for Z, X, Y in self.inner_dataloader:
-                    Z_inner = Z.to(self.device)
-                    X_inner = X.to(self.device)
-                treatment_1st_feature = self.outer_model(X_inner)#torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_inner)
-                instrumental_1st_feature = self.inner_model.model(Z_inner)
-                instrumental_2nd_feature = self.inner_model.model(Z_outer)
-                feature = augment_stage1_feature(instrumental_1st_feature)
-                stage1_weight = fit_linear(treatment_1st_feature, feature, self.Nlam_V)
-                feature = augment_stage1_feature(instrumental_2nd_feature)
-                predicted_treatment_feature = linear_reg_pred(feature, stage1_weight)
-                feature = augment_stage2_feature(predicted_treatment_feature)
-                stage2_weight = fit_linear(Y_outer, feature, self.lam_u)
-                Y_test = self.test_data.structural
-                X_test = self.test_data.treatment
-                treatment_feature = self.outer_model(X_test)#torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_test)
-                test_feature = augment_stage2_feature(treatment_feature)
-                test_pred = linear_reg_pred(test_feature, stage2_weight)
-                loss = (torch.norm((Y_test - test_pred)) ** 2) / Y_test.size(0)
-
-                #mdl.fit_t(train_1st_t, train_2nd_t, self.lam1, self.lam2)
-                #oos_loss: float = mdl.evaluate_t(test_data_t).data.item()
-                #loss = self.MSE((pred @ last_layer[:-1] + last_layer[-1]), Y)
-            #elif data_type=="validation":
-                #Y = self.validation_data.outcome
-                #Z = self.validation_data.instrumental
-                #stage2_feature = self.inner_solution(Z)
-            #feature = augment_stage2_feature(stage2_feature)
-            #pred = linear_reg_pred(feature, last_layer)
-            #loss = self.MSE(pred, Y)
-        #self.outer_model.train()
-        #self.inner_solution.train()
+                Y_eval = self.test_data.structural
+                X_eval = self.test_data.treatment
+            elif data_type == "validation":
+                Y_eval = self.validation_data.outcome
+                X_eval = self.validation_data.treatment
+            treatment_feature = self.outer_model(X_eval) #torch.func.functional_call(self.outer_model, parameter_and_buffer_dicts=outer_NN_dic, args=X_eval)
+            eval_feature = augment_stage2_feature(treatment_feature)
+            eval_pred = linear_reg_pred(eval_feature, stage2_weight)
+            loss = (torch.norm((Y_eval - eval_pred)) ** 2) / Y_eval.size(0)
         self.outer_model.train(previous_state_outer_model)
+        self.inner_solution.train(previous_state_inner_solution)
         self.inner_model.train(previous_state_inner_model)
         return loss
-
-
-
-
-
-
-
-
-
-
-

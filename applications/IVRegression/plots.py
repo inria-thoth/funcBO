@@ -15,7 +15,7 @@ def plot_line_loss_from_json(json_paths, column_name, metrics_file="metrics", ve
     :param column_name: name of the column to plot
     """
     plt.clf()
-    plt.figure(figsize=(7, 4))
+    plt.figure(figsize=(6, 4))
 
     # Method's data directory
     for i, dir_path in enumerate(json_paths):
@@ -78,7 +78,7 @@ def plot_line_loss_from_json(json_paths, column_name, metrics_file="metrics", ve
     ax.tick_params(axis='x', which='both', color='darkgrey')
     ax.tick_params(axis='y', which='both', color='darkgrey')
     plt.tight_layout()
-    plt.savefig("figures/" + column_name + metrics_file + ".png", dpi=400)
+    plt.savefig("figures/"+column_name+metrics_file+".png",dpi=400)
 
 
 def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", vertical_axis_scale="log", labels=None, colors=None):
@@ -88,7 +88,7 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", ver
     :param column_name: name of the column to plot
     """
     plt.clf()
-    plt.figure(figsize=(7, 4))
+    plt.figure(figsize=(6, 4))
 
     data_to_plot = []
 
@@ -154,7 +154,6 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", ver
         return f'{value:g}'
 
     plt.ylabel('Out-of-Sample MSE', fontsize=14, labelpad=10)
-    plt.xlabel('Training Sample Size', fontsize=14, labelpad=10)
     plt.grid(True, linewidth=0.5)
     plt.yscale(vertical_axis_scale)
     ax = plt.gca()
@@ -178,28 +177,20 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", ver
     ax.tick_params(axis='x', which='both', color='darkgrey')
     ax.tick_params(axis='y', which='both', color='darkgrey')
     plt.tight_layout()
-    plt.savefig("figures/" + column_name + metrics_file + ".png", dpi=400)
+    plt.savefig("figures/"+column_name+metrics_file+".png", dpi=400)
 
 
 # Setting colors, labels and paths to data
 root = "/home/ipetruli/funcBO/applications/data/outputs/"
-methods = ["dfiv5000", "funcBO5000", "funcBO_inner_dual_iterative"]#, "dfiv_original", "dfiv_batchnorm", "dfiv_layernorm"]
-labels = ["DFIV", "funcBO", "funcBO_allLearned"]#, "DFIV", "bDFIV", "lDFIV"]
-custom_colors = ['#00bf7d', '#e76bf3', '#f8766d']#, '#00b0f6', '#d2c5b6']#, '#c0e6da']
+methods = ["dfiv5000", "funcBO_linear5000", "funcBO_dual_iterative5000", "parametricBO_BGS5000", "parametricBO_ITD5000"]
+labels = ["DFIV", "FID linear", "FID", "CID", "ITD"]
+custom_colors = ['#00bf7d', '#e76bf3', '#f8766d', '#00b0f6', '#bdb76b']#, '#d2c5b6']
 json_paths = [root + item for item in methods]
 
 # Plotting line plots
 plot_line_loss_from_json(json_paths, "outer_loss", metrics_file="metrics", y_axis_name="Outer Loss", labels=labels, colors=custom_colors)
-#plot_line_loss_from_json(json_paths, "val_loss", metrics_file="metrics")
-plot_line_loss_from_json(json_paths, "loss", metrics_file="inner_metrics", y_axis_name="Inner Loss", labels=labels, colors=custom_colors)
-plot_line_loss_from_json(json_paths, "loss", vertical_axis_scale="linear", metrics_file="dual_metrics", y_axis_name="Dual Loss", labels=labels, colors=custom_colors)
-
-# Setting colors, labels and paths to data
-root = "/home/ipetruli/funcBO/applications/data/outputs/"
-methods = ["dfiv5000", "funcBO5000", "funcBO_inner_dual_iterative"]#, "dfiv10000", "funcBO10000", "dfiv_original", "dfiv_batchnorm", "dfiv_layernorm"]
-labels = ["DFIV", "funcBO", "funcBO_allLearned"]#, "DFIV", "bDFIV", "lDFIV
-custom_colors = ['#00bf7d', '#e76bf3', '#f8766d']#, '#00b0f6']
-json_paths = [root + item for item in methods]
+#plot_line_loss_from_json(json_paths, "loss", metrics_file="inner_metrics", y_axis_name="Inner Loss", labels=labels, colors=custom_colors)
+#plot_line_loss_from_json(json_paths, "loss", vertical_axis_scale="linear", metrics_file="dual_metrics", y_axis_name="Dual Loss", labels=labels, colors=custom_colors)
 
 # Plotting box plots
 plot_box_loss_from_json(json_paths, "test loss", metrics_file="test_metrics", labels=labels, colors=custom_colors)
