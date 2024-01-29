@@ -93,11 +93,11 @@ class Trainer:
 
 
         # Neural networks for dsprites data
-        self.inner_model, self.outer_model = build_net_for_dsprite(self.args.seed, method='sequential+linear')
-        self.linear_outer = nn.Linear(self.args.linear.in_dim, self.args.linear.out_dim, bias =True)
-        self.inner_model.to(device)
+        inner_model, self.outer_model = build_net_for_dsprite(self.args.seed, method='sequential+linear')
+        inner_model.to(device)
+        self.inner_model = inner_model.model
         self.outer_model.to(device)
-        self.linear_outer.to(device)
+        self.linear_inner = inner_model.linear
         # The outer neural network parametrized by the outer variable
 
         self.lower_var = tuple(self.inner_model.parameters())
@@ -108,7 +108,17 @@ class Trainer:
         #self.inner_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.inner_model, device))
 
         # Optimizer that improves the outer variable
-        self.outer_optimizer = torch.optim.Adam(self.upper_var+tuple(self.linear_outer.parameters()), 
+        all_outer_params = tuple(self.upper_var)
+        if 'iterative_2nd_stage' in self.args:
+            if self.args.iterative_2nd_stage:
+                self.linear_outer = nn.Linear(self.args.linear.in_dim, self.args.linear.out_dim, bias =True)
+                self.linear_outer.to(device)
+                all_outer_params = all_outer_params + tuple(self.linear_outer.parameters())
+                self.inner_model = inner_model 
+                self.lower_var = tuple(inner_model.parameters())
+
+
+        self.outer_optimizer = torch.optim.Adam(all_outer_params, 
                                         lr=self.args.outer_optimizer.outer_lr, 
                                         weight_decay=self.args.outer_optimizer.outer_wd)
 
@@ -117,29 +127,27 @@ class Trainer:
         outer_scheduler = None
 
 
+        def functional_model(model, params,inputs):
+
+            model.eval()
+            params_dict = model.state_dict()
+            for (name, param),new_param in zip(model.named_parameters(),params):
+                params_dict[name] = new_param
+            model_outputs = (torch.func.functional_call(model, 
+                          parameter_and_buffer_dicts=params_dict, 
+                          args=inputs,
+                          strict=True))
+            return model_outputs
+
+
+
+
 
         def functional_inner_model(lower_var,inputs):
-
-            self.inner_model.eval()
-            params_dict = self.inner_model.state_dict()
-            for (name, param),new_param in zip(self.inner_model.named_parameters(),lower_var):
-                params_dict[name] = new_param
-            inner_model_outputs = (torch.func.functional_call(self.inner_model, 
-                          parameter_and_buffer_dicts=params_dict, 
-                          args=inputs,
-                          strict=True))
-            return inner_model_outputs
+            return functional_model(self.inner_model,lower_var,inputs)
 
         def functional_outer_model(outer_var, inputs):
-            self.outer_model.eval()
-            params_dict = self.outer_model.state_dict()
-            for (name, param),new_param in zip(self.outer_model.named_parameters(),outer_var):
-                params_dict[name] = new_param
-            outer_model_outputs = (torch.func.functional_call(self.outer_model, 
-                          parameter_and_buffer_dicts=params_dict, 
-                          args=inputs,
-                          strict=True))
-            return outer_model_outputs
+            return functional_model(self.outer_model,outer_var,inputs)
 
 
         self.functional_inner_model = functional_inner_model
@@ -153,12 +161,56 @@ class Trainer:
         reg_func = lambda weight: ridge_func(weight, self.lam_V)
 
         # Outer objective function
-        def fo(g_z_out, Y):
+        def fo(lower_var,Z_outer, Y_outer, upper_var): 
+            inner_data  = self.inner_solution.linear_op.inputs
+            z,x,_ = projector(inner_data)
+            outer_val = self.functional_outer_model(upper_var,x)
+            inner_val = self.functional_inner_model(lower_var,z)
+            inner_val_stage_2 = self.functional_inner_model(lower_var,Z_outer)
 
-            pred = self.linear_outer(g_z_out)
-            reg = torch.norm(self.linear_outer.weight)**2 + torch.norm(self.linear_outer.bias)**2
-            loss = torch.norm((Y - pred)) ** 2 + self.lam_u*reg
+
+
+            res = fit_2sls(inner_val, outer_val, 
+                            inner_val_stage_2, Y_outer, 
+                            self.Nlam_V, self.lam_u)
+
+            return res["stage2_loss"]
+
+        def fi(data, upper_var,lower_var):
+
+            z,x,_ = projector(data) 
+            inner_val = self.functional_inner_model(lower_var,z)
+            outer_val = self.functional_outer_model(upper_var,x)
+            feature = augment_stage1_feature(inner_val)
+            weight = fit_linear(outer_val, feature, self.Nlam_V)
+            pred = linear_reg_pred(feature, weight)
+            loss = torch.norm((outer_val - pred)) ** 2 + ridge_func(weight,self.Nlam_V)
             return loss
+
+
+
+        if 'iterative_2nd_stage' in self.args:
+            if self.args.iterative_2nd_stage:      
+
+                def fo(g_z_out, Y):
+
+                    pred = self.linear_outer(g_z_out)
+                    reg = torch.norm(self.linear_outer.weight)**2 + torch.norm(self.linear_outer.bias)**2
+                    loss = torch.norm((Y - pred)) ** 2 + self.lam_u*reg
+                    return loss
+
+                # Inner objective function that depends only on the inner prediction
+                def fi(data, upper_var,lower_var):#, backward_mode=False):
+                    
+                    z,x,_ = projector(data) 
+                    inner_val = self.functional_inner_model(lower_var,z)
+                    outer_val = self.functional_outer_model(upper_var,x)
+                    reg = torch.stack([torch.sum(param**2) for param in lower_var],dim=0)
+                    reg = torch.sum(reg)
+                    loss = torch.norm((outer_val - inner_val)) ** 2 + self.Nlam_V*reg
+                    return loss
+
+
 
 
         def projector(data):
@@ -177,22 +229,8 @@ class Trainer:
             return z,x,None
 
 
-        # Inner objective function that depends only on the inner prediction
-        def fi(data, upper_var,lower_var):#, backward_mode=False):
-            
-            z,x,_ = projector(data) 
-            inner_val = self.functional_inner_model(lower_var,z)
-            outer_val = self.functional_outer_model(upper_var,x)
-            reg = torch.stack([torch.sum(param**2) for param in lower_var],dim=0)
-            reg = torch.sum(reg)
-            loss = torch.norm((outer_val - inner_val)) ** 2 + self.Nlam_V*reg
-            return loss
-
-
-
-        
         self.inner_loss = fi
-        self.outer_loss = fo
+        self.outer_loss = fo        
 
         #self.lower_loss = Functional(self.lower_loss_module)
         #self.upper_loss = Functional(self.upper_loss_module)
@@ -231,8 +269,12 @@ class Trainer:
                 params = self.lower_var + self.upper_var
                 opt_lower_var,lower_loss = self.inner_solution(*params)
                 inner_val = self.functional_inner_model(opt_lower_var,Z_outer)
+                inputs= opt_lower_var,Z_outer, Y_outer, self.upper_var
+                if 'iterative_2nd_stage' in self.args:
+                    if self.args.iterative_2nd_stage: 
+                        inputs = opt_lower_var, Y_outer
 
-                loss = self.outer_loss(inner_val, Y_outer)
+                loss = self.outer_loss(inputs)
 
                 # Backpropagation
                 self.outer_optimizer.zero_grad()
@@ -256,6 +298,8 @@ class Trainer:
                 done = (self.iters >= self.args.max_epochs)
                 if done:
                     break
+
+
         if self.validation_data:
             val_log = [{'inner_iter': 0,
                         'val loss': (self.evaluate(data_type="validation")).item()}]

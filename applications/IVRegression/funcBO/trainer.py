@@ -79,9 +79,21 @@ class Trainer:
         self.inner_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.inner_model, device))
 
         # Optimizer that improves the outer variable
-        self.outer_optimizer = torch.optim.Adam([self.outer_param], 
+        
+        all_outer_params = tuple(self.outer_param)
+        if 'iterative_2nd_stage' in self.args:
+            if self.args.iterative_2nd_stage:
+                self.linear_outer = nn.Linear(self.args.linear.in_dim, self.args.linear.out_dim, bias =True)
+                self.linear_outer.to(device)
+                all_outer_params =  all_outer_params + tuple(self.linear_outer.parameters())
+                    
+
+
+        self.outer_optimizer = torch.optim.Adam(all_outer_params, 
                                         lr=self.args.outer_optimizer.outer_lr, 
                                         weight_decay=self.args.outer_optimizer.outer_wd)
+
+
 
         inner_scheduler = None
         inner_dual_scheduler = None
@@ -93,12 +105,24 @@ class Trainer:
         reg_func = lambda weight: ridge_func(weight, self.lam_V)
 
         # Outer objective function
+
         def fo(g_z_out, Y):
             res = fit_2n_stage(
                             g_z_out, 
                             Y,  
                             self.lam_u)
             return res["stage2_loss"]
+
+        if 'iterative_2nd_stage' in self.args:
+            if self.args.iterative_2nd_stage:      
+
+                def fo(g_z_out, Y):
+
+                    pred = self.linear_outer(g_z_out)
+                    reg = torch.norm(self.linear_outer.weight)**2 + torch.norm(self.linear_outer.bias)**2
+                    loss = torch.norm((Y - pred)) ** 2 + self.lam_u*reg
+                    return loss
+
 
         # Inner objective function that depends only on the inner prediction
         def fi(treatment_feature, instrumental_feature):#, backward_mode=False):
