@@ -21,14 +21,11 @@ parent_log_dir="../../../data/outputs/cartpole_3"
 #                 +mlxp.version_manager.parent_work_dir=$parent_work_dir\
 
 
-
-
-
 HYDRA_FULL_ERROR=1 OC_CAUSE=1 python applications/ModelBasedRL/funcBO/main.py \
-                agent_type='vep','mle','omd','funcBO'\
                 seed=0,1,2,3,4,5,6,7,8,9\
                 inner_lr=0.0003,0.001,0.003\
                 tau=0.01,0.005\
+                agent_type='vep','mle','omd','funcBO'\
                 +mlxp.use_scheduler=True\
                 +mlxp.use_version_manager=True\
                 +mlxp.interactive_mode=True\
