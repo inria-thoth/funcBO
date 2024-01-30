@@ -6,7 +6,7 @@ parent_work_dir="../../../data/.workdir"
 
 #Run parametric implicit differentiation
 #parent_log_dir="../../../data/outputs/cartpole"
-parent_log_dir="../../../data/outputs/cartpole_3"
+parent_log_dir="../../../data/outputs/cartpole_4"
 
 # HYDRA_FULL_ERROR=1 OC_CAUSE=1 python -m ipdb applications/ModelBasedRL/funcBO/main.py \
 #                 agent_type='vep'\
