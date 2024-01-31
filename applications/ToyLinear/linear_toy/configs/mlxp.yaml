@@ -1,0 +1,24 @@
+logger:
+  name: DefaultLogger
+  parent_log_dir: ../../data/outputs/debug
+  forced_log_id: -1
+  log_streams_to_file: false
+scheduler:
+  name: OARScheduler
+  shell_path: /bin/bash
+  shell_config_cmd: ''
+  env_cmd: 'conda activate bilevel'
+  cleanup_cmd: 'source gpu_setVisibleDevices.sh'
+  option_cmd: ["-l core=1, walltime=00:10:00",
+                "-t besteffort",
+                "-t idempotent",
+                "-p gpumem>'16000' and not host like 'gpuhost25' and not host like 'gpuhost26' and not host like 'gpuhost8'"
+              ]
+version_manager:
+  name: GitVM
+  parent_work_dir: ../../data/.workdir
+  compute_requirements: false
+use_version_manager: false
+use_scheduler: false
+use_logger: true
+interactive_mode: true

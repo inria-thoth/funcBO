@@ -12,3 +12,5 @@ data.lock
 /figures
 tmp.sh
 res
+applications/IVRegression/launch*.sh
+applications/ModelBasedRL/figures/

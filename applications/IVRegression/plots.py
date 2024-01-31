@@ -184,9 +184,9 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", ver
 
 # Setting colors, labels and paths to data
 root = "/home/ipetruli/funcBO/applications/data/final_results/"
-methods = ["dfiv5k", "funcBO_linear5k", "funcBO_dual_iterative5k", "parametricBO_BGS_5k", "parametricBO_ITD_5k"]
-labels = ["DFIV", "FuncID linear", "FuncID", "ITD", "AID"]
-custom_colors = ['#00bf7d', '#e76bf3', '#f8766d', '#00b0f6', '#bdb76b']#, '#d2c5b6']
+methods = ["parametricBO_BGS_5k", "parametricBO_ITD_5k", "dfiv5k", "funcBO_linear5k", "funcBO_dual_iterative5k"]
+labels = ["AID", "ITD", "DFIV", "FuncID linear", "FuncID"]
+custom_colors = ['#bdb76b', '#00b0f6', '#00bf7d', '#e76bf3', '#f8766d']
 json_paths = [root + item for item in methods]
 
 # Plotting line plots
@@ -194,15 +194,31 @@ plot_line_loss_from_json(json_paths, "outer_loss", metrics_file="metrics", y_axi
 plot_line_loss_from_json(json_paths, "loss", metrics_file="inner_metrics", y_axis_name="Inner Loss", labels=labels, colors=custom_colors, figure_name="inner_loss5000")
 plot_line_loss_from_json(json_paths, "loss", vertical_axis_scale="linear", metrics_file="dual_metrics", y_axis_name="Dual Loss", labels=labels, colors=custom_colors, figure_name="dual_loss5000")
 
+
+colors  ={'omd': 'red',
+          'funcBO':'blue'}
+
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+#agg_results[0]['eval.episode_return_avg']
+
+best_keys_list = [value for key,value in best_keys.items()]
+for key, value  in res.items():
+    if key in best_keys_list:
+        ax.plot(value['eval.step_avg'], value['eval.episode_return_avg'], label = key, color=colors[key[0]])
+
+
+#ax.plot_legend()
+
 # Plotting box plots
 plot_box_loss_from_json(json_paths, "test loss", metrics_file="test_metrics", labels=labels, colors=custom_colors, figure_name="test_loss5000")
 
 print("Done with 5000 plots")
 
 # Setting colors, labels and paths to data
-methods = ["dfiv10k", "funcBO_linear10k", "funcBO_dual_iterative10k", "parametricBO_BGS_10k", "parametricBO_ITD_10k"]
-labels = ["DFIV", "FuncID linear", "FuncID", "ITD", "AID"]
-custom_colors = ['#00bf7d', '#e76bf3', '#f8766d', '#00b0f6', '#bdb76b']#, '#d2c5b6']
+methods = ["parametricBO_BGS_10k", "parametricBO_ITD_10k", "dfiv10k", "funcBO_linear10k", "funcBO_dual_iterative10k"]
+labels = ["AID", "ITD", "DFIV", "FuncID linear", "FuncID"]
+custom_colors = ['#bdb76b', '#00b0f6', '#00bf7d', '#e76bf3', '#f8766d']#, '#d2c5b6']
 json_paths = [root + item for item in methods]
 
 # Plotting line plots
