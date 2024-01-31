@@ -1,10 +1,10 @@
 seed: 1
-batch_size: 5000
+batch_size: 2500
 max_epochs: 100
 eval_every_n: 1
 lam_u: 0.1
 lam_V: 0.2
-data_size: 10000
+data_size: 5000
 val_size: 200
 split_ratio: 0.5
 

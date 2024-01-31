@@ -80,16 +80,16 @@ class Trainer:
 
         # Optimizer that improves the outer variable
         
-        all_outer_params = tuple(self.outer_param)
-        if 'iterative_2nd_stage' in self.args:
-            if self.args.iterative_2nd_stage:
-                self.linear_outer = nn.Linear(self.args.linear.in_dim, self.args.linear.out_dim, bias =True)
-                self.linear_outer.to(device)
-                all_outer_params =  all_outer_params + tuple(self.linear_outer.parameters())
+        #all_outer_params = tuple(self.outer_param)
+        #if 'iterative_2nd_stage' in self.args:
+        #    if self.args.iterative_2nd_stage:
+        #        self.linear_outer = nn.Linear(self.args.linear.in_dim, self.args.linear.out_dim, bias =True)
+        #        self.linear_outer.to(device)
+        #        all_outer_params =  all_outer_params + tuple(self.linear_outer.parameters())
                     
 
 
-        self.outer_optimizer = torch.optim.Adam(all_outer_params, 
+        self.outer_optimizer = torch.optim.Adam([self.outer_param], 
                                         lr=self.args.outer_optimizer.outer_lr, 
                                         weight_decay=self.args.outer_optimizer.outer_wd)
 

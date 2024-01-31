@@ -164,27 +164,27 @@ class Trainer:
         def fo(lower_var,Z_outer, Y_outer, upper_var): 
             inner_data  = self.inner_solution.optimizer.inputs
             z,x,_ = projector(inner_data)
-            outer_val = self.functional_outer_model(upper_var,x)
-            inner_val = self.functional_inner_model(lower_var,z)
-            inner_val_stage_2 = self.functional_inner_model(lower_var,Z_outer)
+            treatment_1st_feature = self.functional_outer_model(upper_var,x)
+            instrumental_1st_feature = self.functional_inner_model(lower_var,z)
+            instrumental_2nd_feature = self.functional_inner_model(lower_var,Z_outer)
 
 
 
-            res = fit_2sls(inner_val, outer_val, 
-                            inner_val_stage_2, Y_outer, 
+            res = fit_2sls(treatment_1st_feature, instrumental_1st_feature, 
+                            instrumental_2nd_feature, Y_outer, 
                             self.Nlam_V, self.lam_u)
 
             return res["stage2_loss"]
 
-        def fi(data, upper_var,lower_var):
+        def fi(data, upper_var, lower_var):
 
             z,x,_ = projector(data) 
-            inner_val = self.functional_inner_model(lower_var,z)
-            outer_val = self.functional_outer_model(upper_var,x)
-            feature = augment_stage1_feature(inner_val)
-            weight = fit_linear(outer_val, feature, self.Nlam_V)
+            instrumental_feature = self.functional_inner_model(lower_var,z)
+            treatment_feature = self.functional_outer_model(upper_var,x)
+            feature = augment_stage1_feature(instrumental_feature)
+            weight = fit_linear(treatment_feature, feature, self.Nlam_V)
             pred = linear_reg_pred(feature, weight)
-            loss = torch.norm((outer_val - pred)) ** 2 + ridge_func(weight,self.Nlam_V)
+            loss = torch.norm((treatment_feature - pred)) ** 2 + ridge_func(weight,self.Nlam_V)
             return loss
 
 

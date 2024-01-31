@@ -1,5 +1,5 @@
 seed: 1
-max_epochs: 2
+max_epochs: 100
 eval_every_n: 1
 lam_u: 0.1
 lam_V: 0.1

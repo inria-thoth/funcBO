@@ -6,7 +6,7 @@ batch_size: 2500
 max_epochs: 100
 eval_every_n: 1
 lam_u: 0.1
-lam_V: 0.01  # (grid search) L2 reg for all inner params (no need for weight decay in the optimizer)
+lam_V: 0.2
 data_size: 5000
 val_size: 200
 split_ratio: 0.5
