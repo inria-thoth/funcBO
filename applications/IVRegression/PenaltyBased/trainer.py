@@ -84,8 +84,11 @@ class Trainer:
         feature = augment_stage1_feature(instrumental_feature)
         loss1 = linear_reg_loss(treatment_feature, feature, self.lam1)
         # Compute the L2 gradient norm of the stage 1 loss
-        loss1.backward()
-        grad_norm = torch.sqrt(sum([torch.norm(p.grad)**2 for p in self.instrumental_network.parameters()]))
+        grad_params = torch.autograd.grad(loss1, self.instrumental_network.parameters(), create_graph=True)
+        grad_norm = 0
+        for grad in grad_params:
+            grad_norm += grad.pow(2).sum()
+        grad_norm = grad_norm.sqrt()
         # Compute stage 2 loss
         # Get the value of g(Z)_stage1
         instrumental_1st_feature = self.instrumental_network(self.inner_data.instrumental).detach()

@@ -13,7 +13,7 @@ HYDRA_FULL_ERROR=1 OC_CAUSE=1 python applications/IVRegression/PenaltyBased/main
                 lam_V=0.1,0.01,0.001\
                 penalty=1,0.1,0.01,0.001\
                 optimizer.lr=0.01,0.001,0.0001\
-                optimizer.weight_decay=0.1,0.01,0.001\
+                optimizer.wd=0.1,0.01,0.001\
                 +mlxp.use_scheduler=False\
                 +mlxp.use_version_manager=False\
                 +mlxp.interactive_mode=False\
