@@ -44,6 +44,14 @@ class Trainer:
         self.test_data = TestDataSetTorch.from_numpy(self.test_data, device=self.device, dtype=self.dtype)
 
         self.instrumental_network, self.treatment_network = build_net_for_dsprite(self.args.seed, method='sequential')
+
+        # Build the auxiliary network by copying the instrumental network
+        self.auxiliary_network = copy.deepcopy(self.instrumental_network)
+        self.auxiliary_network.to(self.device)
+        self.aux_optimizer = torch.optim.Adam(self.auxiliary_network.parameters(),
+                                            lr=self.args.aux_optimizer.lr, 
+                                            weight_decay=self.args.aux_optimizer.wd)
+
         self.instrumental_network.to(self.device)
         self.treatment_network.to(self.device)
         # Optimizer that improves the treatment network
@@ -55,7 +63,8 @@ class Trainer:
         self.penalty = self.args.penalty
         self.lam1 = self.args.lam_V
         self.lam2 = self.args.lam_u
-        
+        self.aux_iters = self.args.aux_iters
+
     def train(self):
         """
         The main optimization loop for the Penalty method.
@@ -78,18 +87,33 @@ class Trainer:
         self.log({'iter': epoch, 'test loss': (self.evaluate(self.inner_data, self.outer_data)).item()}, log_name='test_metrics')
 
     def penalty_loss(self):
+        ### Optimize the value of the loss function
+        for i in range(self.aux_iters):
+            self.aux_optimizer.zero_grad()
+            # Get the value of f(X)
+            treatment_feature = self.treatment_network(self.inner_data.treatment).detach()
+            # Get the value of aux(Z)
+            instrumental_feature = self.auxiliary_network(self.inner_data.instrumental)
+            feature = augment_stage1_feature(instrumental_feature)
+            aux_loss = linear_reg_loss(treatment_feature, feature, self.lam1)
+            aux_loss.backward()
+            self.aux_optimizer.step()
+        ### Compute the min value of the loss function
+        # Get the value of f(X)
+        treatment_feature = self.treatment_network(self.inner_data.treatment)
+        # Get the value of aux(Z)
+        instrumental_feature = self.auxiliary_network(self.inner_data.instrumental).detach()
+        feature = augment_stage1_feature(instrumental_feature)
+        aux_loss = linear_reg_loss(treatment_feature, feature, self.lam1)
+        ### Compute the total loss
         # Get the value of f(X)
         treatment_feature = self.treatment_network(self.inner_data.treatment)
         # Get the value of g(Z)
         instrumental_feature = self.instrumental_network(self.inner_data.instrumental)
         feature = augment_stage1_feature(instrumental_feature)
-        loss1 = linear_reg_loss(treatment_feature, feature, self.lam1)
-        # Compute the L2 gradient norm of the stage 1 loss
-        grad_params = torch.autograd.grad(loss1, self.instrumental_network.parameters(), create_graph=True)
-        grad_norm = 0
-        for grad in grad_params:
-            grad_norm += grad.pow(2).sum()
-        grad_norm = grad_norm.sqrt()
+        loss_inn = linear_reg_loss(treatment_feature, feature, self.lam1)
+        # Compute the difference between inner loss and min value of the inner loss
+        loss1 = loss_inn - aux_loss
         # Compute stage 2 loss
         # Get the value of g(Z)_stage1
         instrumental_1st_feature = self.instrumental_network(self.inner_data.instrumental)
@@ -99,7 +123,7 @@ class Trainer:
         treatment_1st_feature = self.treatment_network(self.inner_data.treatment)
         res = fit_2sls(treatment_1st_feature, instrumental_1st_feature, instrumental_2nd_feature, self.outer_data.outcome, self.lam1, self.lam2)
         loss2 = res["stage2_loss"]
-        total_loss = loss2 + self.penalty*grad_norm
+        total_loss = loss2 + self.penalty*loss1
         #dot = make_dot(total_loss, params={"treatment_net_layer0_wight0": list(self.treatment_network.parameters())[0], "instrumental_net_layer0_wight0": list(self.instrumental_network.parameters())[0]})
         #dot.render("attached", format="png")
         return total_loss

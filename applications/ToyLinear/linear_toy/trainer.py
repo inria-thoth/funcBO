@@ -2,8 +2,8 @@ import torch
 from applications.IVRegression.dataset_networks_dsprites.twoSLS import *
 from applications.IVRegression.dataset_networks_dsprites.generator import *
 import time
-from funcBO.utils import assign_device, get_dtype, tensor_to_state_dict, state_dict_to_tensor
-from torch.utils.data import DataLoader
+from funcBO.utils import assign_device, get_dtype, tensor_to_state_dict, state_dict_to_tensor, auxiliary_toy_data
+from torch.utils.data import TensorDataset, DataLoader
 from funcBO.InnerSolution import InnerSolution
 
 class Trainer:
@@ -44,14 +44,39 @@ class Trainer:
         device = self.device
 
         # Generate synthetic dsprites data
-        self.nb_aux_tasks = self.args.nb_aux_tasks
+        self.nb_aux_tasks = 4
         self.max_epochs = self.args.max_epochs
-        
+
+        # Data for auxiliary task learning
+        n, m, X_outer, X_inner, y_outer, y_inner, coef = auxiliary_toy_data(self.dtype, self.device, seed=self.args.seed)
+        # Create a TensorDataset from your tensors
+        outer_dataset = TensorDataset(X_outer, y_outer)
+        self.outer_dataloader = DataLoader(outer_dataset, batch_size=len(outer_dataset), shuffle=False)
+        self.inner_dataset = TensorDataset(X_inner, y_inner)
+        self.inner_dataloader = DataLoader(self.inner_dataset, batch_size=len(self.inner_dataset), shuffle=False)
+
         # Neural networks
-        self.inner_model, self.outer_model = None, None
+        self.outer_model = nn.Sequential(nn.Linear(self.nb_aux_tasks, 1, bias=False))
+        self.inner_model = nn.Sequential(nn.Linear(n, 256),
+                                            nn.ReLU(),
+                                            nn.Linear(256, 128),
+                                            nn.ReLU(),
+                                            nn.Linear(128, 128),
+                                            nn.ReLU(),
+                                            nn.BatchNorm1d(128),
+                                            nn.Linear(128, 32),
+                                            nn.ReLU(self.nb_aux_tasks+1))
         
+        self.inner_model.to(device)
+        self.outer_model.to(device)
+
         # The outer neural network parametrized by the outer variable
         self.outer_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.outer_model, device))
+        # Print the weights of the first layer
+        print("Weights of the first layer:")
+        print(self.outer_model[0].weight.data)
+        print("Outer parameter weights: ", self.outer_param.data)
+        self.outer_param.requires_grad = True
 
         self.inner_param = torch.nn.parameter.Parameter(state_dict_to_tensor(self.inner_model, device))
 
@@ -64,40 +89,41 @@ class Trainer:
         outer_scheduler = None
 
         MSE = torch.nn.MSELoss(reduction='mean')
+        relu = torch.nn.ReLU()
+
+        def masked_mse_loss(input, target, mask_value=-1):
+            mask = target != mask_value
+            masked_input = input[mask]
+            masked_target = target[mask]
+            # Return tensor with 0 if all values are mask_value
+            if len(masked_input) == 0:
+                return torch.tensor(0.0, dtype=input.dtype, device=input.device)
+            return MSE(masked_input, masked_target)
 
         # Outer objective function
         def fo(h_X_out, y_out):
-            main_pred, aux_pred = h_X_out[0], h_X_out[1:self.nb_aux_tasks+1]
-            main_label, aux_label = y_out[0], y_out[1:self.nb_aux_tasks+1]
+            main_pred, aux_pred = h_X_out[:,0], h_X_out[:,1:self.nb_aux_tasks+1]
+            main_label, aux_label = y_out[:,0], y_out[:,1:self.nb_aux_tasks+1]
             loss = MSE(main_pred, main_label)
             return loss
 
         # Inner objective function
-        def fi(h_X_in, y_in):
-            # Keep the weights of the labels positive
-            self.outer_param = relu(self.outer_param)
-            main_pred, aux_pred = h_X_in[0], h_X_in[1:self.nb_aux_tasks+1]
-            aux_pred = torch.sigmoid(aux_pred)
-            main_label, aux_label = y_in[0], y_in[1:self.nb_aux_tasks+1]
-            aux_label = aux_label
-            loss = MSE(main_pred, main_label)
-            aux_loss = self.outer_model(aux_pred)
-            return loss + aux_loss
+        def fi(outer_model_val, h_X_in):
+            main_pred, aux_pred = h_X_in[:,0], h_X_in[:,1:self.nb_aux_tasks+1]
+            for X, y in self.inner_dataloader:
+                y_inner = y.to(device)
+            main_label, aux_label = y_inner[:,0], y_inner[:,1:self.nb_aux_tasks+1]
+            loss = MSE(main_pred.to(device), main_label)
+            aux_loss_vector = torch.zeros((self.nb_aux_tasks,1)).to(device)
+            for task in range(self.nb_aux_tasks):
+                aux_loss_vector[task] = MSE(aux_pred[:,task].to(device), aux_label[:,task].to(device))
+            outer_model_inputs = aux_loss_vector.T
+            return loss + outer_model_val
 
         def projector(data):
-            """
-            Extracts and returns the relevant components (z, x) from the input data.
-
-            Parameters:
-            - data (tuple): A tuple containing information, where the first element represents z,
-                        the second element represents x, and the third element may contain
-                        additional information (ignored in this context).
-
-            Returns:
-            - tuple: A tuple containing the relevant components (z, x) extracted from the input data.
-            """
-            z,x,_ = data
-            return z,x,None
+            # Should return inner_model_inputs, outer_model_inputs, inner_loss_inputs
+            X, y = data
+            return X, None, None
         
         self.inner_loss = fi
         self.outer_loss = fo
@@ -132,6 +158,7 @@ class Trainer:
                 forward_start = time.time()
                 # Get the value of h*(Z_outer)
                 inner_value = self.inner_solution(X_outer)
+                inner_value.retain_grad()
                 loss = self.outer_loss(inner_value, Y_outer)
                 # Backpropagation
                 self.outer_optimizer.zero_grad()
@@ -151,6 +178,7 @@ class Trainer:
                 done = (self.iters >= self.max_epochs)
                 if done:
                     break
+                print("Outer parameter weights: ", self.outer_param.data)
         if self.validation_data:
             val_log = [{'inner_iter': 0,
                         'val loss': (self.evaluate(data_type="validation")).item()}]

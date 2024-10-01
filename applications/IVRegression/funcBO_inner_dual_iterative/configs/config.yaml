@@ -5,12 +5,12 @@ eval_every_n: 1
 lam_u: 0.1
 lam_V: 0.2
 data_size: 5000
-val_size: 200
+val_size: 0
 split_ratio: 0.5
 
 system:
     device: -1
-    dtype: 32
+    dtype: 64
 
 weight2_dim: 33
 

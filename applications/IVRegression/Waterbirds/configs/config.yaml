@@ -1,17 +1,21 @@
 seed: 1
-max_epochs: 2000
-lam_V: 0.2
+max_epochs: 100
 lam_u: 0.1
+lam_V: 0.1
 data_size: 5000
 val_size: 0
 split_ratio: 0.5
-penalty: 0.1
+penalty: 0.01
+aux_iters: 20
 
 system:
     device: -1
     dtype: 64
  
 optimizer:
-    lr: 0.00001
+    lr: 0.001
     wd: 0.1
 
+aux_optimizer:
+    lr: 0.001
+    wd: 0.1

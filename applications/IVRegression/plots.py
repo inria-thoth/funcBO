@@ -8,7 +8,7 @@ import numpy as np
 import os
 import json
 
-def plot_line_loss_from_json(json_paths, column_name, metrics_file="metrics", vertical_axis_scale="log", y_axis_name="Loss", labels=None, colors=None, figure_name="line_plot_loss"):
+def plot_line_loss_from_json(json_paths, column_name, metrics_file="metrics", vertical_axis_scale="log", y_axis_name="Loss", labels=None, colors=None, figure_name="line_plot_loss", legend_loc='best', x_axis_title='Iterations'):
     """
     Plot the average loss curve with standard deviation from JSON files over iterations.
     :param json_paths: list of paths to directories containing JSON files
@@ -59,10 +59,11 @@ def plot_line_loss_from_json(json_paths, column_name, metrics_file="metrics", ve
         plt.plot(iterations, mean_values, label=label, linewidth=1.5, color=color)
         plt.fill_between(iterations, mean_values - std_values, mean_values + std_values, color=color, alpha=0.1)
 
-    plt.legend(title='Algorithms', loc='center left', bbox_to_anchor=(1, 0.5), frameon=False, title_fontsize='14')
+    #plt.legend(title='Algorithms', loc='center left', bbox_to_anchor=(1, 0.5), frameon=False, title_fontsize='14')
+    plt.legend(title='Algorithms', frameon=False, title_fontsize='14', loc=legend_loc)
     
     plt.ylabel(y_axis_name, fontsize=14, labelpad=10)
-    plt.xlabel('Iterations', fontsize=14)
+    plt.xlabel(x_axis_title, fontsize=14)
     plt.grid(True, linewidth=0.5)
     plt.yscale(vertical_axis_scale)
     ax = plt.gca()
@@ -97,6 +98,7 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", ver
     for dir_path in json_paths:
         all_runs_data = []
         # One run's data directory
+        print("Dir path: ", dir_path)
         for run_directory in os.listdir(dir_path):
             run_path = os.path.join(dir_path, run_directory)
             # Path to the metrics file
@@ -109,6 +111,7 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", ver
                         if data == [] or all([elem is None for elem in data]):
                             continue
                         loss_values = [entry.get(column_name, None) for entry in data]
+                        print("Loss values: ", loss_values)
                         all_runs_data.extend(loss_values)
 
         # Skip if no data was found
@@ -119,8 +122,16 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", ver
 
     labels = labels if labels else [os.path.basename(dir_path) for dir_path in json_paths]
     colors = colors if colors else plt.cm.rainbow(np.linspace(0, 1, len(json_paths)))
+    
+    # Debugging print statements
+    print("Labels length: ", len(labels))
+    print("Data to plot length: ", len(data_to_plot))
+
     # Create box plots
-    box_plot = plt.boxplot(data_to_plot, labels=labels, patch_artist=True, widths=0.8)#, positions=[0.2, 1.1, 2.2, 3.1])
+    for d in data_to_plot:
+        print("Mean: ", np.mean(d))
+    print("Data to plot len: ", len(data_to_plot))
+    box_plot = plt.boxplot(data_to_plot, labels=labels, patch_artist=True, widths=0.8, showmeans=True, meanline=True)#, positions=[0.2, 1.1, 2.2, 3.1])
 
     # Customize box colors
     legend_handles = []
@@ -149,7 +160,13 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", ver
         # Add the patch and lines to the legend handles
         legend_handles.append((box_patch, median_line))
 
-    plt.legend(legend_handles, labels, handlelength=1, title='Algorithms', loc='center left', bbox_to_anchor=(1, 0.5), frameon=False, title_fontsize='14')
+    # Set meanline properties
+    for meanline in box_plot['means']:
+        meanline.set_color('black')
+        meanline.set_linewidth(2)
+
+    #plt.legend(legend_handles, labels, handlelength=1, title='Algorithms', loc='center left', bbox_to_anchor=(1, 0.5), frameon=False, title_fontsize='14')
+    plt.legend(legend_handles, labels, handlelength=1, title='Algorithms', frameon=False, title_fontsize='14', loc='upper right')
 
     def format_tick(value, tick_number):
         return f'{value:g}'
@@ -184,47 +201,34 @@ def plot_box_loss_from_json(json_paths, column_name, metrics_file="metrics", ver
 
 # Setting colors, labels and paths to data
 root = "/home/ipetruli/funcBO/applications/data/final_results/"
-methods = ["parametricBO_BGS_5k", "parametricBO_ITD_5k", "dfiv5k", "funcBO_linear5k", "funcBO_dual_iterative5k"]
-labels = ["AID", "ITD", "DFIV", "FuncID linear", "FuncID"]
-custom_colors = ['#bdb76b', '#00b0f6', '#00bf7d', '#e76bf3', '#f8766d']
+"""
+methods = ["parametricBO_BGS_5k", "GDpenalty5k", "VALpenalty5k", "parametricBO_ITD_5k", "dfiv5k", "funcBO_linear5k", "funcBO_dual_iterative5k"]
+custom_colors = ['#f8766d', '#00b1c4', '#008828', '#00bf7d', '#e76bf3', '#005aff', '#00b0f6']
+labels = ["AID", "GD penal.", "Val. penal.", "ITD", "DFIV", "FuncID lin.", "FuncID"]
 json_paths = [root + item for item in methods]
 
 # Plotting line plots
-plot_line_loss_from_json(json_paths, "outer_loss", metrics_file="metrics", y_axis_name="Outer Loss", labels=labels, colors=custom_colors, figure_name="outer_loss5000")
-plot_line_loss_from_json(json_paths, "loss", metrics_file="inner_metrics", y_axis_name="Inner Loss", labels=labels, colors=custom_colors, figure_name="inner_loss5000")
-plot_line_loss_from_json(json_paths, "loss", vertical_axis_scale="linear", metrics_file="dual_metrics", y_axis_name="Dual Loss", labels=labels, colors=custom_colors, figure_name="dual_loss5000")
-
-
-colors  ={'omd': 'red',
-          'funcBO':'blue'}
-
-
-fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-#agg_results[0]['eval.episode_return_avg']
-
-best_keys_list = [value for key,value in best_keys.items()]
-for key, value  in res.items():
-    if key in best_keys_list:
-        ax.plot(value['eval.step_avg'], value['eval.episode_return_avg'], label = key, color=colors[key[0]])
-
-
-#ax.plot_legend()
+#plot_line_loss_from_json(json_paths, "outer_loss", metrics_file="metrics", y_axis_name="Outer Loss", labels=labels, colors=custom_colors, figure_name="outer_loss5000", x_axis_title='Outer iterations')
+#plot_line_loss_from_json(json_paths, "loss", metrics_file="inner_metrics", y_axis_name="Inner Loss", labels=labels, colors=custom_colors, figure_name="inner_loss5000", legend_loc='lower right', x_axis_title='Inner iterations')
+#plot_line_loss_from_json(json_paths, "loss", vertical_axis_scale="linear", metrics_file="dual_metrics", y_axis_name="Dual Loss", labels=labels, colors=custom_colors, figure_name="dual_loss5000")
 
 # Plotting box plots
 plot_box_loss_from_json(json_paths, "test loss", metrics_file="test_metrics", labels=labels, colors=custom_colors, figure_name="test_loss5000")
 
 print("Done with 5000 plots")
-
+"""
 # Setting colors, labels and paths to data
-methods = ["parametricBO_BGS_10k", "parametricBO_ITD_10k", "dfiv10k", "funcBO_linear10k", "funcBO_dual_iterative10k"]
-labels = ["AID", "ITD", "DFIV", "FuncID linear", "FuncID"]
-custom_colors = ['#bdb76b', '#00b0f6', '#00bf7d', '#e76bf3', '#f8766d']#, '#d2c5b6']
+methods = ["parametricBO_BGS_10k", "GDpenalty10k", "VALpenalty10k", "parametricBO_ITD_10k", "dfiv10k", "funcBO_linear10k", "funcBO_dual_iterative10k"]
+custom_colors = ['#f8766d', '#00b1c4', '#008828', '#00bf7d', '#e76bf3', '#005aff', '#00b0f6']
+labels = ["AID", "GD penal.", "Val. penal.", "ITD", "DFIV", "FuncID lin.", "FuncID"]
 json_paths = [root + item for item in methods]
 
 # Plotting line plots
-plot_line_loss_from_json(json_paths, "outer_loss", metrics_file="metrics", y_axis_name="Outer Loss", labels=labels, colors=custom_colors, figure_name="outer_loss10000")
-plot_line_loss_from_json(json_paths, "loss", metrics_file="inner_metrics", y_axis_name="Inner Loss", labels=labels, colors=custom_colors, figure_name="inner_loss10000")
-plot_line_loss_from_json(json_paths, "loss", vertical_axis_scale="linear", metrics_file="dual_metrics", y_axis_name="Dual Loss", labels=labels, colors=custom_colors, figure_name="dual_loss10000")
+#plot_line_loss_from_json(json_paths, "outer_loss", metrics_file="metrics", y_axis_name="Outer Loss", labels=labels, colors=custom_colors, figure_name="outer_loss10000", x_axis_title='Outer iterations')
+#plot_line_loss_from_json(json_paths, "loss", metrics_file="inner_metrics", y_axis_name="Inner Loss", labels=labels, colors=custom_colors, figure_name="inner_loss10000", legend_loc='lower right', x_axis_title='Inner iterations')
+#plot_line_loss_from_json(json_paths, "loss", vertical_axis_scale="linear", metrics_file="dual_metrics", y_axis_name="Dual Loss", labels=labels, colors=custom_colors, figure_name="dual_loss10000")
 
 # Plotting box plots
 plot_box_loss_from_json(json_paths, "test loss", metrics_file="test_metrics", labels=labels, colors=custom_colors, figure_name="test_loss10000")
+
+print("Done with 10000 plots")

@@ -1,6 +1,6 @@
 ## Functional Bilevel Optimization
 
-A project on bilevel optimization in the context of work at Thoth team INRIA under the supervision of Michael Arbel.
+A project on bilevel optimization in the context of work at Thoth team INRIA under the supervision of Michael Arbel and Julien Mairal.
 
 To install dependencies:
 pip install -r dependencies.txt

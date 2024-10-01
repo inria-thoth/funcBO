@@ -226,4 +226,5 @@ class ArgMinOp(torch.autograd.Function):
                                                        inner_model_inputs, 
                                                        outer_model_inputs, 
                                                        inner_loss_inputs)
+    print('grad', grad)
     return None, grad, None

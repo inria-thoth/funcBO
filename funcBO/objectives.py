@@ -13,7 +13,6 @@ from funcBO.utils import RingGenerator
 
 
 
-
 class Objective:
   """
   
@@ -58,7 +57,7 @@ class Objective:
 
   def get_inner_model_input(self):
       data = next(self.inner_dataloader)
-      inner_model_inputs,outer_model_inputs, inner_loss_inputs =  self.data_projector(data)
+      inner_model_inputs, outer_model_inputs, inner_loss_inputs =  self.data_projector(data)
       return inner_model_inputs
 
 
@@ -99,6 +98,14 @@ class DualObjective:
     dual_val_outer = dual_model(dual_model_inputs)
     B_inner = dual_val_inner.shape[0]
     B_outer = dual_val_outer.shape[0]
+    ################### DEBUG
+    # Check if hessian is close to identity and exit
+    hess = hessian(f, inner_model_output)
+    identity = torch.eye(hess.shape[0], device=hess.device)
+    print('Hessian shape:', hess.shape)
+    print('Hessian:', hess)
+    exit(0)
+    ###################
     hessvp = autograd.functional.hvp(f, inner_model_output, dual_val_inner)[1]
 
     # Compute the loss
